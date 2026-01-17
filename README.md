@@ -35,10 +35,39 @@ We don't just say we're fast; we prove it.
 
 - [x] **Phase 1-5: The Foundation** (CRUD, Relations, Transactions, Validation)
 - [x] **Phase 6: The Versatility** (Multi-DB, Soft Deletes, Bulk Ops) ✅ **Stable**
-- [ ] **Phase 7: DevOps** (Versioned Migrations) � **Next**
+- [x] **Phase 7: DevOps** (Versioned Migrations) ✅ **Stable**
 - [ ] **Phase 8: Scalability** (Read/Write Splitting) ⚖️
 - [ ] **Phase 9: Advanced Relations** (Polymorphic) 🎭 (Deferred)
 - [ ] **Phase 10: Legacy Support** (Composite Keys) 🏛️
+
+---
+
+## 🚚 Migrations (New in v1.0!)
+
+Premix now supports traditional versioned migrations for production environments.
+
+### 1. Create a Migration
+```bash
+cargo run -p premix-cli -- migrate create add_users
+# Created: migrations/20260118000000_add_users.sql
+```
+
+### 2. Edit SQL
+```sql
+-- migration/2026xxx_add_users.sql
+-- up
+CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
+
+-- down
+DROP TABLE users;
+```
+
+### 3. Run Migrations
+```bash
+cargo run -p premix-cli -- migrate up
+# 🚚 Applying migration: 20260118000000_add_users
+# ✅ Migrations up to date.
+```
 
 ---
 
@@ -132,8 +161,8 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-core = { path = "./premix-core" }
-premix-macros = { path = "./premix-macros" }
+premix-core = "1.0.0"
+premix-macros = "1.0.0"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

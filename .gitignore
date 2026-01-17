@@ -70,3 +70,8 @@ rustc-ice-*.txt
 .env
 .env.local
 .env.*.local
+
+# ===================
+# Reports & Docs
+# ===================
+coverage/

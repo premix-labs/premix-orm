@@ -116,7 +116,6 @@
 
 ### 🌍 Phase 6: The "Versatility" - ✅ COMPLETED
 **Mission:** Remove all limitations, support every need.
-**Target:** Premix ORM v1.0 Release Candidate
 
 - [x] **Multi-Database Architecture:**
     - [x] Created `SqlDialect` trait (`placeholder`, `primary_key_type`, `map_type`).
@@ -137,15 +136,17 @@
 
 ✅ **Milestone 6:** Premix supports Multi-DB Architecture. Concrete Postgres/MySQL to be added in next versions.
 
-### 🚚 Phase 7: The "DevOps" (Versioned Migrations)
+### 🚚 Phase 7: The "DevOps" (Versioned Migrations) - ✅ COMPLETED
 **Mission:** Move from "Solo Dev" tools to "Team" tools.
-**Target:** Premix ORM v1.1.0 (Integration)
+**Target:** Premix ORM v1.0.0 (Release)
 
-- [ ] **Versioned Migrations:**
-    - [ ] `premix-cli migrate` command family.
-    - [ ] `create`: Generate `YYYYMMDD_name.sql`.
-    - [ ] `up`/`down`: Apply and Revert migrations.
-    - [ ] `Migrator`: Core logic to track versions in `_premix_migrations` table.
+- [x] **Versioned Migrations:**
+    - [x] `premix-cli migrate` command family.
+    - [x] `create`: Generate `YYYYMMDDHHMMSS_name.sql`.
+    - [x] `up`: Apply pending migrations using `Migrator`.
+    - [x] `Migrator`: Core logic to track versions in `_premix_migrations` table.
+
+✅ **Milestone 7:** Full Migration System completed. Premix ORM is ready for v1.0.0 Release.
 
 ### ⚖️ Phase 8: The "Scale" (High Availability)
 **Mission:** Support apps with millions of users.
@@ -183,7 +184,36 @@
 
 ---
 
-## 🖼️ 3. Architecture Diagram (Mental Model)
+## 🤖 3. Developer Automation Suite
+
+We use a comprehensive suite of PowerShell scripts to standardize workflows.
+Located in `scripts/`, organized by category:
+
+### 📂 `scripts/dev` (Daily Development)
+- **`run_fmt.ps1`**: Format code (`cargo fmt`) and fix clippy warnings (`cargo clippy --fix`).
+- **`run_clean.ps1`**: Deep clean of build artifacts and database files.
+- **`gen_docs.ps1`**: Generate rustdoc and mdBook documentation.
+
+### � `scripts/test` (Verification)
+- **`test_quick.ps1`**: Fast "Smoke Test" (Build + Run Basic App).
+- **`test_examples.ps1`**: Run all example apps to ensure no regressions.
+- **`test_migration.ps1`**: E2E test for the Migration CLI and SQL application.
+
+### 📂 `scripts/ci` (Quality Assurance)
+- **`check_all.ps1`**: Full workspace check (Build, Test, Clippy) used in CI pipelines.
+- **`check_audit.ps1`**: Security vulnerability scan (`cargo audit`).
+- **`check_coverage.ps1`**: Code coverage report (`cargo tarpaulin`).
+
+### 📂 `scripts/bench` (Performance)
+- **`bench_orm.ps1`**: Compare Premix overhead against Raw SQLx.
+- **`bench_io.ps1`**: Heavy I/O benchmark (Partial/Postgres).
+
+### 📂 `scripts/release` (Deployment)
+- **`run_publish.ps1`**: Automated crates.io publication with safety checks.
+
+---
+
+## �🖼️ 4. Architecture Diagram (Mental Model)
 
 ### Working Flow
 1.  **Compile Time (Left):**
@@ -193,7 +223,7 @@
 
 ---
 
-## ⚠️ 4. Engineering Risks
+## ⚠️ 5. Engineering Risks
 To create a world-class ORM, we must overcome these challenges:
 
 ### 1. 🐌 Compile Time Explosion

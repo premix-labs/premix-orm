@@ -2,6 +2,8 @@ pub use sqlx;
 use sqlx::{Database, Executor as SqlxExecutor, IntoArguments};
 
 pub struct Premix;
+pub mod migrator;
+pub use migrator::{Migration, Migrator};
 
 // Chapter 18: Multi-Database Support
 // We define a trait that encapsulates all the requirements for a database to work with Premix.
