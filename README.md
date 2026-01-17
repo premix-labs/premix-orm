@@ -10,7 +10,7 @@ Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need f
 
 ## 🌟 Why Premix?
 
-- **🚫 No Migration Files:** Premix syncs your Rust structs directly to the database. No more `up.sql` / `down.sql`.
+- **🪄 Auto-Sync Schema:** Premix syncs your Rust structs directly to the database for rapid prototyping. No manual SQL required.
 - **⚡ Zero Overhead:** Uses Rust Macros to generate SQL at compile-time. No runtime reflection.
 - **🚀 Application-Level Joins:** Solves the N+1 problem using smart `WHERE IN` clauses instead of complex SQL JOINs, making scaling easier.
 - **🌍 Multi-Database:** Write once, run on **SQLite**, **PostgreSQL**, or **MySQL** (Coming Soon).
@@ -35,10 +35,10 @@ We don't just say we're fast; we prove it.
 
 - [x] **Phase 1-5: The Foundation** (CRUD, Relations, Transactions, Validation)
 - [x] **Phase 6: The Versatility** (Multi-DB, Soft Deletes, Bulk Ops) ✅ **Stable**
-- [ ] **Phase 7: Advanced Relations** (Polymorphic Associations) 🚧 **Next**
-- [ ] **Phase 8: DevOps** (Versioned Migrations, Seeding)
-- [ ] **Phase 9: Scalability** (Read/Write Splitting)
-- [ ] **Phase 10: Legacy Support** (Composite Keys)
+- [ ] **Phase 7: DevOps** (Versioned Migrations) � **Next**
+- [ ] **Phase 8: Scalability** (Read/Write Splitting) ⚖️
+- [ ] **Phase 9: Advanced Relations** (Polymorphic) 🎭 (Deferred)
+- [ ] **Phase 10: Legacy Support** (Composite Keys) 🏛️
 
 ---
 

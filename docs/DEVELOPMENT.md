@@ -137,36 +137,33 @@
 
 ✅ **Milestone 6:** Premix supports Multi-DB Architecture. Concrete Postgres/MySQL to be added in next versions.
 
-### 🎭 Phase 7: Advanced Relations (Advanced Flexibility)
-**Mission:** Support complex real-world relationships.
-**Target:** Premix ORM v1.1.0
-
-- [ ] **Polymorphic Relations:**
-    - [ ] `#[belongs_to(polymorphic = "transformable")]`
-    - [ ] Support `transformable_id` and `transformable_type` logic.
-    - [ ] Eager loading for mixed types.
-- [ ] **Declarative Migrations (Idea):**
-    - [ ] Explore Schema definition file approach.
-
-### �️ Phase 8: The "DevOps" (Team Workflows)
+### 🚚 Phase 7: The "DevOps" (Versioned Migrations)
 **Mission:** Move from "Solo Dev" tools to "Team" tools.
+**Target:** Premix ORM v1.1.0 (Integration)
 
 - [ ] **Versioned Migrations:**
-    - [ ] `premix-cli make:migration add_users` command.
-    - [ ] Generate `YYYYMMDD_add_users.up.sql` and `.down.sql`.
-    - [ ] `migrate:up` and `migrate:down` commands.
-- [ ] **Data Seeding:**
-    - [ ] `DbSeeder` trait.
-    - [ ] `seed:run` command.
-- [ ] **Schema Dump:** Generate `schema.rs` from existing DB (Reverse Engineering).
+    - [ ] `premix-cli migrate` command family.
+    - [ ] `create`: Generate `YYYYMMDD_name.sql`.
+    - [ ] `up`/`down`: Apply and Revert migrations.
+    - [ ] `Migrator`: Core logic to track versions in `_premix_migrations` table.
 
-### 🚀 Phase 9: The "Scale" (High Availability)
+### ⚖️ Phase 8: The "Scale" (High Availability)
 **Mission:** Support apps with millions of users.
+**Target:** Premix ORM v1.2.0 (Scale)
 
 - [ ] **Read/Write Splitting:**
     - [ ] Automatic routing of `SELECT` to Replicas and `INSERT/UPDATE` to Primary.
     - [ ] Configuration: `DATABASE_URL` (Primary) + `DATABASE_READ_URLS` (Replicas).
 - [ ] **Connection Resolver:** Dynamic database switching (Multi-Tenancy).
+
+### 🎭 Phase 9: Advanced Relations (Optional Future)
+**Mission:** Support complex, niche data modeling.
+**Status:** Deferred (Complexity vs Value Trade-off)
+
+- [ ] **Polymorphic Relations:**
+    - [ ] `#[polymorphic]` attribute.
+    - [ ] Support `imageable_type` and `imageable_id` logic.
+- [ ] **Declarative Migrations:** Schema definition file approach.
 
 ### 🏛️ Phase 10: The "Legacy" (Compatibility)
 **Mission:** Support brownfield projects.
