@@ -2,6 +2,11 @@
 // Compare: Premix ORM vs SeaORM vs Rbatis vs Raw SQL
 
 #[cfg(feature = "postgres")]
+use std::env;
+#[cfg(feature = "postgres")]
+use std::sync::atomic::{AtomicI32, Ordering};
+
+#[cfg(feature = "postgres")]
 use criterion::{Criterion, criterion_group, criterion_main};
 #[cfg(feature = "postgres")]
 use premix_core::Model as PremixModel;
@@ -11,10 +16,6 @@ use premix_macros::Model;
 use sea_orm::{Database, Set, entity::prelude::*};
 #[cfg(feature = "postgres")]
 use sqlx::postgres::PgPoolOptions;
-#[cfg(feature = "postgres")]
-use std::env;
-#[cfg(feature = "postgres")]
-use std::sync::atomic::{AtomicI32, Ordering};
 #[cfg(feature = "postgres")]
 use tokio::runtime::Runtime;
 

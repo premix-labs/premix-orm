@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,7 +10,6 @@ use premix_core::{Model, Premix};
 use premix_macros::Model;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePool;
-use std::sync::Arc;
 
 // 1. Define Model
 #[derive(Model, Debug, Serialize, Deserialize)]

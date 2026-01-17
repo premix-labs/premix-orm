@@ -1,14 +1,4 @@
 # Clippy Configuration
 msrv = "1.75.0"
 
-[lints.clippy]
-# Warn on some common issues but allow generally
-all = "warn"
-# Disallow some specific bad practices
-unwrap_used = "allow"  # Allowed for now, but good to tighten later
-print_stdout = "allow" # Allowed for CLI tools, but maybe warn in core later
-
-# Enforce some pedantic lints
-str_to_string = "warn"
-cast_lossless = "warn"
-needless_borrow = "warn"
+# Enforce some pedantic lints - Moved to Cargo.toml

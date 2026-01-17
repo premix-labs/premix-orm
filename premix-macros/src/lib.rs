@@ -64,10 +64,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
     let field_names: Vec<_> = field_idents.iter().map(|id| id.to_string()).collect();
     let field_idents_len = field_idents.len();
 
-    let eager_load_body = match relations::generate_eager_load_body(input) {
-        Ok(tokens) => tokens,
-        Err(err) => return Err(err),
-    };
+    let eager_load_body = relations::generate_eager_load_body(input)?;
     let has_version = field_names.contains(&"version".to_string());
     let has_soft_delete = field_names.contains(&"deleted_at".to_string());
 

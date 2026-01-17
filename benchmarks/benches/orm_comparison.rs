@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicI32, Ordering};
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use premix_core::{Executor, Model as PremixModel, UpdateResult};
 use premix_macros::Model;
@@ -5,7 +7,6 @@ use rbatis::RBatis;
 use sea_orm::{Database, QuerySelect, Set, TransactionTrait, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePool;
-use std::sync::atomic::{AtomicI32, Ordering};
 use tokio::runtime::Runtime;
 
 // Atomic counter for Unique ID
