@@ -2,6 +2,9 @@
 name = "premix-macros"
 version = "1.0.0"
 edition = "2024"
+description = "Proc-macros for Premix ORM."
+license = "MIT"
+repository = "https://github.com/premix-labs/premix-orm"
 
 [lib]
 proc-macro = true # <--- This line is very important!
