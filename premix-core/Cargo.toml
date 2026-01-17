@@ -1,0 +1,21 @@
+[package]
+name = "premix-core"
+version = "0.1.0"
+edition = "2024"
+
+
+[features]
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite"]
+postgres = ["sqlx/postgres"]
+mysql = ["sqlx/mysql"]
+
+[dependencies]
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio",
+    "macros",
+], default-features = false }
+tracing = "0.1.44"
+async-trait = "0.1.89"
+serde = "1.0.228"
+serde_json = "1.0.149"

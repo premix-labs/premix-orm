@@ -1,0 +1,12 @@
+[package]
+name = "premix-macros"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true # <--- This line is very important!
+
+[dependencies]
+syn = "2.0.114"         # Parser: Reads Rust code (Struct)
+quote = "1.0.43"        # Generator: Generates Rust code back
+proc-macro2 = "1.0.105" # Bridge

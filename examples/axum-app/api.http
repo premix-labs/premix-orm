@@ -1,0 +1,12 @@
+### 1. Test Create User (ORM: save)
+POST http://localhost:3000/users
+Content-Type: application/json
+
+{
+  "id": 101,
+  "name": "Kob",
+  "role": "Moderator"
+}
+
+### 2. Test Get User (ORM: find)
+GET http://localhost:3000/users/101

@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "premix-core",
+    "premix-macros",
+    "examples/basic-app",
+    "examples/axum-app",
+    "examples/relation-app",
+    "benchmarks",
+    "examples/eager-app",
+    "examples/transaction-app",
+    "examples/hooks-app",
+    "examples/tracing-app",
+    "examples/optimistic-locking-app",
+    "examples/validation-app",
+    "examples/soft-delete-app",
+    "examples/bulk-ops-app",
+    "premix-cli",
+]

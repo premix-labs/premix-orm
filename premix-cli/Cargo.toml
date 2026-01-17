@@ -1,0 +1,13 @@
+[package]
+name = "premix-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.23", features = ["derive"] }
+tokio = { version = "1.49.0", features = ["full"] }
+premix-core = { path = "../premix-core" }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
+syn = { version = "2.0.114", features = ["full"] }
+quote = "1.0.43"
+walkdir = "2.5.0"

@@ -1,0 +1,12 @@
+[package]
+name = "soft-delete-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+premix-core = { path = "../../premix-core" }
+premix-macros = { path = "../../premix-macros" }
+tokio = { version = "1.49.0", features = ["full"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "sqlite"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
