@@ -23,18 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.2] - 2026-01-18
 
-### Fixed 🐛
+### Fixed
 - **Facade Sync:** Fixed a critical issue where the `premix-orm` facade could not find the `prelude` module in `premix-core` during publication.
 - **Doctests:** Fixed all documentation examples to ensure they compile and run correctly, supporting the `premix-orm` unified entry point.
 
 ## [1.0.1] - 2026-01-18
 
-### Added 🚀
+### Added
 - **Facade Crate (`premix-orm`):** Introduced a unified entry point crate. Users can now depend solely on `premix-orm` instead of managing `premix-core` and `premix-macros` separately.
 - **Documentation:** Added `README.md` for `premix-core`, `premix-macros`, and `premix-cli` to ensure proper display on crates.io.
 - **Benchmarks:** Expanded suite to cover **Soft Deletes** and improved fail-fast logic in `bench_orm.ps1`.
 
-### Fixed 🐛
+### Fixed
 - **Auto-Increment IDs:** Fixed a critical bug in `save()` where explicitly setting ID to 0 prevented the database from auto-generating IDs.
 - **Manual ID Support:** Improved `save()` to support manual IDs while still defaulting to auto-increment when ID is 0.
 - **ID Synchronization:** Fixed a bug where the struct's `id` field wasn't updated from the database after a `save()` call.
@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-01-18
 
-### Added 🚀
+### Added
 - **Migration System (Phase 7):**
     - `premix-cli migrate create <name>` command to generate timestamped SQL files (`YYYYMMDDHHMMSS_name.sql`).
     - `premix-cli migrate up` command to apply pending migrations.
@@ -70,11 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Lifecycle Hooks:** `before_save` and `after_save`.
     - JSON/JSONB support via `serde_json`.
 
-### Changed 🔧
+### Changed
 - Internal architecture refactored to separate `premix-core` (runtime) and `premix-macros` (compile-time).
 - Improved error handling with spanned macro errors.
 
-### Fixed 🐛
+### Fixed
 - Solved N+1 query problem using application-level joins (WHERE IN).
 
 ## [0.1.0-alpha] - 2026-01-01

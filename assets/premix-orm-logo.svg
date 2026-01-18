@@ -1,0 +1,25 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="300" fill="#0B0F14"/>
+  <g transform="translate(70 60)">
+    <rect x="0" y="0" width="200" height="180" rx="20" fill="#0F172A" stroke="#1F2937" stroke-width="2"/>
+    <rect x="18" y="18" width="164" height="144" rx="16" fill="#0B1220"/>
+    <g fill="#22D3EE">
+      <rect x="32" y="38" width="12" height="104" rx="6"/>
+      <rect x="56" y="30" width="12" height="120" rx="6"/>
+      <rect x="80" y="46" width="12" height="88" rx="6"/>
+      <rect x="104" y="26" width="12" height="128" rx="6"/>
+      <rect x="128" y="38" width="12" height="104" rx="6"/>
+    </g>
+    <g stroke="#22D3EE" stroke-width="4" stroke-linecap="round">
+      <line x1="210" y1="40" x2="260" y2="40"/>
+      <line x1="210" y1="90" x2="280" y2="90"/>
+      <line x1="210" y1="140" x2="245" y2="140"/>
+    </g>
+  </g>
+  <text x="360" y="150" fill="#F3F4F6" font-size="64" font-family="Segoe UI, Arial, sans-serif" letter-spacing="1">
+    Premix ORM
+  </text>
+  <text x="360" y="200" fill="#94A3B8" font-size="22" font-family="Segoe UI, Arial, sans-serif">
+    Five pillars: fast, clear, safe, transparent, flexible.
+  </text>
+</svg>

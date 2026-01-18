@@ -5,6 +5,18 @@ Premix offers two ways to manage schemas:
 1. `Premix::sync` for auto-create tables from models.
 2. Versioned SQL migrations via the CLI.
 
+```mermaid
+flowchart TD
+  A[Model Changes] --> B[Premix::sync]
+  B --> C[CREATE TABLE/ALTER TABLE]
+  C --> D[(Database)]
+
+  A --> E[premix migrate create]
+  E --> F[SQL Migration Files]
+  F --> G[premix migrate up]
+  G --> D
+```
+
 ## Auto Sync
 
 ```rust

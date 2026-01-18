@@ -1,3 +1,5 @@
+![Premix ORM Banner](assets/premix-orm-banner.svg)
+
 # Premix ORM
 
 > **"Write Rust, Run Optimized SQL."**
@@ -7,6 +9,8 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![crates.io](https://img.shields.io/crates/v/premix-orm.svg)](https://crates.io/crates/premix-orm)
 [![docs.rs](https://img.shields.io/badge/docs.rs-premix--orm-blue)](https://docs.rs/premix-orm)
+
+![Premix ORM Logo](assets/premix-orm-logo.svg)
 
 Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need for manual migration files. It combines the ease of use of Active Record with the raw performance of handcrafted SQL.
 
@@ -180,8 +184,31 @@ Prefer a template? Start from `examples/basic-app` and modify as needed.
 For a longer-form guide, see `orm-book/` in this repository. It covers models,
 queries, relations, migrations, transactions, and limitations.
 
+## Architecture (At a Glance)
+
+![Premix ORM Architecture](assets/premix-orm-architecture.svg)
+
 Release notes live in `CHANGELOG.md`, and the development roadmap is in
 `docs/DEVELOPMENT.md`.
+
+## How Premix Differs (Flow)
+
+```mermaid
+flowchart LR
+  subgraph Premix
+    A[Rust Model] --> B[Macros Generate Code]
+    B --> C[SQL Builders]
+    C --> D[sqlx Executor]
+    D --> E[(Database)]
+  end
+
+  subgraph Typical_ORM
+    F[Rust Model] --> G[Runtime ORM Layer]
+    G --> H[SQL Generation]
+    H --> I[Driver/Executor]
+    I --> J[(Database)]
+  end
+```
 
 ## Advanced Features
 

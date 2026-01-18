@@ -5,6 +5,19 @@ Premix supports `has_many` and `belongs_to` relations. There are two layers:
 1. Lazy relation methods generated from struct-level attributes.
 2. Eager loading via `include()` on fields marked with `#[premix(ignore)]`.
 
+```mermaid
+flowchart LR
+  subgraph Lazy
+    A[Load Users] --> B[For each user: query posts]
+    B --> C[(N+1 queries)]
+  end
+
+  subgraph Eager
+    D[Load Users] --> E[Single batched query for posts]
+    E --> F[(2 queries total)]
+  end
+```
+
 ## Lazy Relations (Struct Attributes)
 
 ```rust
