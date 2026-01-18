@@ -75,7 +75,7 @@ premix migrate up
 
 ### 1. Define Your Model
 ```rust
-use premix_orm::Model;
+use premix_orm::prelude::*;
 // No need to import premix_core or premix_macros separately!
 
 #[derive(Model)]
@@ -116,7 +116,7 @@ let users = User::find_in_pool(&pool)
 ### 🗑️ Soft Deletes
 Never accidentally lose data again.
 ```rust
-#[derive(Model, SoftDelete)] // <--- Just add this!
+#[derive(Model)] // <--- Auto-detected by field name!
 struct User {
     id: i32,
     deleted_at: Option<DateTime<Utc>>,
@@ -161,7 +161,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = "1.0.0"
+premix-orm = "1.0.1"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

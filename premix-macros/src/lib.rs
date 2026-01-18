@@ -264,7 +264,10 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 // Filter out 'id' and 'version' for INSERT
                 let columns: Vec<&str> = vec![ #( #field_names ),* ]
                     .into_iter()
-                    .filter(|&c| c != "id" && c != "version" && c != "deleted_at")
+                    .filter(|&c| {
+                        if c == "id" { return self.id != 0; }
+                        true
+                    })
                     .collect();
 
                 let placeholders = (1..=columns.len())
@@ -278,19 +281,21 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
                 // Bind only non-id/version fields
                 #(
-                    if #field_names != "id" && #field_names != "version" && #field_names != "deleted_at" {
+                    if #field_names != "id" {
                         query = query.bind(&self.#field_idents);
+                    } else {
+                        if self.id != 0 {
+                            query = query.bind(&self.id);
+                        }
                     }
                 )*
 
                 let result = executor.execute(query).await?;
 
-                // Set the ID if it's 0 (new record)
-                if self.id == 0 {
-                    let last_id = <DB as premix_core::SqlDialect>::last_insert_id(&result);
-                    if last_id > 0 {
-                         self.id = last_id as i32;
-                    }
+                // Sync the ID from Database
+                let last_id = <DB as premix_core::SqlDialect>::last_insert_id(&result);
+                if last_id > 0 {
+                     self.id = last_id as i32;
                 }
 
                 self.after_save().await?;

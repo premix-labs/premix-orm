@@ -15,8 +15,7 @@
 //! ## 🚀 Quick Start
 //!
 //! ```rust,no_run
-//! use premix_orm::Model;
-//! use premix_orm::prelude::*; // Assuming prelude exists in core, or just use specific items
+//! use premix_orm::prelude::*;
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Model, Debug, Serialize, Deserialize)]
@@ -41,7 +40,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! premix-orm = "1.0.0"
+//! premix-orm = "1.0.1"
 //! ```
 
 pub use premix_core::*;

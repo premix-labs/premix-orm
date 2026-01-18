@@ -10,9 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 🚀
 - **Facade Crate (`premix-orm`):** Introduced a unified entry point crate. Users can now depend solely on `premix-orm` instead of managing `premix-core` and `premix-macros` separately.
 - **Documentation:** Added `README.md` for `premix-core`, `premix-macros`, and `premix-cli` to ensure proper display on crates.io.
+- **Benchmarks:** Expanded suite to cover **Soft Deletes** and improved fail-fast logic in `bench_orm.ps1`.
 
 ### Fixed 🐛
-- **Auto-Increment IDs:** Fixed a critical bug in `save()` where explicitly setting ID to 0 prevented the database from auto-generating IDs. The macro now correctly excludes the ID column on insert and retrieves the `last_insert_id`.
+- **Auto-Increment IDs:** Fixed a critical bug in `save()` where explicitly setting ID to 0 prevented the database from auto-generating IDs.
+- **Manual ID Support:** Improved `save()` to support manual IDs while still defaulting to auto-increment when ID is 0.
+- **ID Synchronization:** Fixed a bug where the struct's `id` field wasn't updated from the database after a `save()` call.
 - **Executor API:** Resolved type inference ambiguities in `IntoExecutor` for multi-database contexts.
 
 

@@ -26,6 +26,7 @@ try {
 
     Write-Step "Building & Running 'orm_comparison'..."
     cargo bench --bench orm_comparison
+    if ($LASTEXITCODE -ne 0) { throw "Bench failed with exit code $LASTEXITCODE" }
 
     Write-Success "Benchmark Execution Successful."
     Write-Host "   View results in: target/criterion/report/index.html" -ForegroundColor DarkGray

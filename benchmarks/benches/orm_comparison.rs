@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use premix_core::{Executor, Model as PremixModel, UpdateResult};
+use premix_core::{Executor, Model as PremixModel, Premix, UpdateResult};
 use premix_macros::Model;
 use rbatis::RBatis;
 use sea_orm::{Database, QuerySelect, Set, TransactionTrait, entity::prelude::*};
@@ -36,6 +36,13 @@ struct UserVersioned {
     id: i32,
     name: String,
     version: i32,
+}
+
+#[derive(Model)]
+struct UserSoft {
+    id: i32,
+    name: String,
+    deleted_at: Option<String>,
 }
 
 // --- 2. SeaORM Entity ---
@@ -995,6 +1002,63 @@ fn benchmark_optimistic_locking(c: &mut Criterion) {
     group.finish();
 }
 
+fn benchmark_soft_delete(c: &mut Criterion) {
+    let rt = Runtime::new().unwrap();
+    let (pool, _sea_db, _rb) = rt.block_on(setup_db());
+
+    rt.block_on(async {
+        Premix::sync::<sqlx::Sqlite, UserSoft>(&pool).await.unwrap();
+    });
+
+    let mut group = c.benchmark_group("Soft Delete");
+
+    // 1. Raw SQL Soft Delete (Baseline)
+    group.bench_function("soft_delete_sqlx_raw", |b| {
+        b.to_async(&rt).iter(|| async {
+            let id = INSERT_COUNTER.fetch_add(1, Ordering::SeqCst);
+            // Insert
+            sqlx::query("INSERT INTO usersofts (id, name, deleted_at) VALUES ($1, $2, $3)")
+                .bind(id)
+                .bind("Alice")
+                .bind(None::<String>)
+                .execute(&pool)
+                .await
+                .unwrap();
+
+            // Soft Delete (Update)
+            sqlx::query("UPDATE usersofts SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1")
+                .bind(id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        })
+    });
+
+    // 2. Premix Soft Delete
+    group.bench_function("soft_delete_premix", |b| {
+        b.to_async(&rt).iter(|| async {
+            let id = INSERT_COUNTER.fetch_add(1, Ordering::SeqCst);
+            let mut u = UserSoft {
+                id,
+                name: "Alice".to_string(),
+                deleted_at: None,
+            };
+            <UserSoft as PremixModel<sqlx::Sqlite>>::save(&mut u, &pool)
+                .await
+                .unwrap();
+
+            // Soft Delete via .delete()
+            <UserSoft as PremixModel<sqlx::Sqlite>>::delete(&mut u, Executor::Pool(&pool))
+                .await
+                .unwrap();
+
+            assert!(u.deleted_at.is_some());
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     benchmark_insert,
@@ -1005,6 +1069,7 @@ criterion_group!(
     benchmark_update_delete,
     benchmark_transactions,
     benchmark_optimistic_locking,
-    benchmark_bulk_ops
+    benchmark_bulk_ops,
+    benchmark_soft_delete
 );
 criterion_main!(benches);

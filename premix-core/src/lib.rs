@@ -1,5 +1,9 @@
 pub use async_trait;
 pub use sqlx;
+
+pub mod prelude {
+    pub use crate::{Executor, IntoExecutor, Model, Premix, UpdateResult};
+}
 use sqlx::{Database, Executor as SqlxExecutor, IntoArguments};
 
 pub struct Premix;
