@@ -178,3 +178,212 @@ fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Err
 
     Ok(migrations)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+
+    fn make_temp_dir() -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("premix_cli_test_{}", nanos));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn load_migrations_empty_dir() {
+        let dir = make_temp_dir();
+        let migrations = load_migrations(dir.to_str().unwrap()).unwrap();
+        assert!(migrations.is_empty());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_migrations_parses_and_sorts() {
+        let dir = make_temp_dir();
+        let file_a = dir.join("20260101000000_create_users.sql");
+        let file_b = dir.join("20260102000000_create_posts.sql");
+        let file_bad = dir.join("badname.sql");
+
+        fs::write(
+            &file_a,
+            "-- up\nCREATE TABLE users (id INTEGER PRIMARY KEY);\n-- down\nDROP TABLE users;\n",
+        )
+        .unwrap();
+        fs::write(
+            &file_b,
+            "-- up\nCREATE TABLE posts (id INTEGER PRIMARY KEY);\n-- down\nDROP TABLE posts;\n",
+        )
+        .unwrap();
+        fs::write(&file_bad, "-- up\nSELECT 1;\n").unwrap();
+
+        let migrations = load_migrations(dir.to_str().unwrap()).unwrap();
+        assert_eq!(migrations.len(), 2);
+        assert_eq!(migrations[0].version, "20260101000000");
+        assert_eq!(migrations[0].name, "create_users");
+        assert!(migrations[0].up_sql.contains("CREATE TABLE users"));
+        assert!(migrations[0].down_sql.contains("DROP TABLE users"));
+
+        assert_eq!(migrations[1].version, "20260102000000");
+        assert_eq!(migrations[1].name, "create_posts");
+        assert!(migrations[1].up_sql.contains("CREATE TABLE posts"));
+        assert!(migrations[1].down_sql.contains("DROP TABLE posts"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_migrations_handles_missing_markers() {
+        let dir = make_temp_dir();
+        let file = dir.join("20260103000000_partial.sql");
+
+        fs::write(&file, "CREATE TABLE items (id INTEGER PRIMARY KEY);").unwrap();
+
+        let migrations = load_migrations(dir.to_str().unwrap()).unwrap();
+        assert_eq!(migrations.len(), 1);
+        assert_eq!(migrations[0].version, "20260103000000");
+        assert_eq!(migrations[0].name, "partial");
+        assert!(!migrations[0].up_sql.is_empty());
+        assert!(migrations[0].down_sql.is_empty());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn cli_parses_init() {
+        let cli = Cli::try_parse_from(["premix", "init"]).unwrap();
+        match cli.command {
+            Commands::Init => {}
+            _ => panic!("expected init command"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_sync_with_db() {
+        let cli = Cli::try_parse_from(["premix", "sync", "--database", "sqlite:dev.db"]).unwrap();
+        match cli.command {
+            Commands::Sync { database } => {
+                assert_eq!(database.as_deref(), Some("sqlite:dev.db"));
+            }
+            _ => panic!("expected sync command"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_sync_without_db() {
+        let cli = Cli::try_parse_from(["premix", "sync"]).unwrap();
+        match cli.command {
+            Commands::Sync { database } => {
+                assert!(database.is_none());
+            }
+            _ => panic!("expected sync command"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_migrate_create() {
+        let cli = Cli::try_parse_from(["premix", "migrate", "create", "create_users"]).unwrap();
+        match cli.command {
+            Commands::Migrate { action } => match action {
+                MigrateAction::Create { name } => assert_eq!(name, "create_users"),
+                _ => panic!("expected migrate create"),
+            },
+            _ => panic!("expected migrate command"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_migrate_up_with_db() {
+        let cli = Cli::try_parse_from([
+            "premix",
+            "migrate",
+            "up",
+            "--database",
+            "sqlite:premix.db",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Migrate { action } => match action {
+                MigrateAction::Up { database } => {
+                    assert_eq!(database.as_deref(), Some("sqlite:premix.db"));
+                }
+                _ => panic!("expected migrate up"),
+            },
+            _ => panic!("expected migrate command"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_migrate_down() {
+        let cli = Cli::try_parse_from(["premix", "migrate", "down"]).unwrap();
+        match cli.command {
+            Commands::Migrate { action } => match action {
+                MigrateAction::Down => {}
+                _ => panic!("expected migrate down"),
+            },
+            _ => panic!("expected migrate command"),
+        }
+    }
+
+    #[test]
+    fn load_migrations_ignores_non_sql_files() {
+        let dir = make_temp_dir();
+        let file_txt = dir.join("20260104000000_note.txt");
+        fs::write(&file_txt, "hello").unwrap();
+
+        let migrations = load_migrations(dir.to_str().unwrap()).unwrap();
+        assert!(migrations.is_empty());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_migrations_missing_dir_returns_empty() {
+        let dir = make_temp_dir();
+        fs::remove_dir_all(&dir).unwrap();
+        let migrations = load_migrations(dir.to_str().unwrap()).unwrap();
+        assert!(migrations.is_empty());
+    }
+
+    #[test]
+    fn load_migrations_parses_down_only() {
+        let dir = make_temp_dir();
+        let file = dir.join("20260105000000_down_only.sql");
+        fs::write(&file, "-- down\nDROP TABLE items;\n").unwrap();
+
+        let migrations = load_migrations(dir.to_str().unwrap()).unwrap();
+        assert_eq!(migrations.len(), 1);
+        assert_eq!(migrations[0].name, "down_only");
+        assert!(migrations[0].down_sql.contains("DROP TABLE items"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_migrations_up_after_down_still_parses() {
+        let dir = make_temp_dir();
+        let file = dir.join("20260106000000_reversed.sql");
+        fs::write(
+            &file,
+            "-- down\nDROP TABLE items;\n-- up\nCREATE TABLE items (id INTEGER PRIMARY KEY);\n",
+        )
+        .unwrap();
+
+        let migrations = load_migrations(dir.to_str().unwrap()).unwrap();
+        assert_eq!(migrations.len(), 1);
+        assert!(migrations[0].up_sql.contains("CREATE TABLE"));
+        assert!(migrations[0].down_sql.contains("DROP TABLE"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn cli_parse_requires_subcommand() {
+        let result = Cli::try_parse_from(["premix"]);
+        assert!(result.is_err());
+    }
+}

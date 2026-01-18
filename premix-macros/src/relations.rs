@@ -133,3 +133,38 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
         Ok(())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn impl_relations_generates_methods() {
+        let input: DeriveInput = parse_quote! {
+            #[has_many(Post)]
+            #[belongs_to(Account)]
+            struct User {
+                id: i32,
+            }
+        };
+        let tokens = impl_relations(&input).unwrap().to_string();
+        assert!(tokens.contains("posts_lazy"));
+        assert!(tokens.contains("account"));
+    }
+
+    #[test]
+    fn generate_eager_load_body_includes_relation_arm() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[has_many(Post)]
+                posts: Option<Vec<Post>>,
+            }
+        };
+        let tokens = generate_eager_load_body(&input).unwrap().to_string();
+        assert!(tokens.contains("posts"));
+        assert!(tokens.contains("WHERE"));
+        assert!(tokens.contains("IN"));
+    }
+}

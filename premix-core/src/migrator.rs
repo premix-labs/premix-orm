@@ -136,3 +136,41 @@ impl Migrator<sqlx::Postgres> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    #[tokio::test]
+    async fn sqlite_migrator_applies_pending_once() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        let migrator = Migrator::new(pool.clone());
+
+        let migrations = vec![Migration {
+            version: "20260101000000".to_string(),
+            name: "create_users".to_string(),
+            up_sql: "CREATE TABLE users (id INTEGER PRIMARY KEY);".to_string(),
+            down_sql: "DROP TABLE users;".to_string(),
+        }];
+
+        migrator.run(migrations.clone()).await.unwrap();
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+
+        migrator.run(migrations).await.unwrap();
+        let count_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count_after, 1);
+    }
+}

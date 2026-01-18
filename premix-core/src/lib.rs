@@ -575,3 +575,533 @@ impl Premix {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::{sqlite::SqliteRow, Sqlite, SqlitePool};
+
+    #[derive(Debug)]
+    struct SoftDeleteModel {
+        id: i32,
+        status: String,
+        deleted_at: Option<String>,
+    }
+
+    #[derive(Debug)]
+    struct HardDeleteModel {
+        id: i32,
+    }
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct DbModel {
+        id: i32,
+        status: String,
+        deleted_at: Option<String>,
+    }
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct DbHardModel {
+        id: i32,
+        status: String,
+    }
+
+    impl<'r> sqlx::FromRow<'r, SqliteRow> for SoftDeleteModel {
+        fn from_row(_row: &SqliteRow) -> Result<Self, sqlx::Error> {
+            Err(sqlx::Error::RowNotFound)
+        }
+    }
+
+    impl<'r> sqlx::FromRow<'r, SqliteRow> for HardDeleteModel {
+        fn from_row(_row: &SqliteRow) -> Result<Self, sqlx::Error> {
+            Err(sqlx::Error::RowNotFound)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Model<Sqlite> for DbModel {
+        fn table_name() -> &'static str {
+            "db_users"
+        }
+        fn create_table_sql() -> String {
+            String::new()
+        }
+        fn list_columns() -> Vec<String> {
+            vec!["id".into(), "status".into(), "deleted_at".into()]
+        }
+        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(UpdateResult::NotImplemented)
+        }
+        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        fn has_soft_delete() -> bool {
+            true
+        }
+        async fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> Result<Option<Self>, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(None)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Model<Sqlite> for DbHardModel {
+        fn table_name() -> &'static str {
+            "db_hard_users"
+        }
+        fn create_table_sql() -> String {
+            String::new()
+        }
+        fn list_columns() -> Vec<String> {
+            vec!["id".into(), "status".into()]
+        }
+        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(UpdateResult::NotImplemented)
+        }
+        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        fn has_soft_delete() -> bool {
+            false
+        }
+        async fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> Result<Option<Self>, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(None)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Model<Sqlite> for SoftDeleteModel {
+        fn table_name() -> &'static str {
+            "users"
+        }
+        fn create_table_sql() -> String {
+            String::new()
+        }
+        fn list_columns() -> Vec<String> {
+            Vec::new()
+        }
+        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(UpdateResult::NotImplemented)
+        }
+        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        fn has_soft_delete() -> bool {
+            true
+        }
+        async fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> Result<Option<Self>, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(None)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Model<Sqlite> for HardDeleteModel {
+        fn table_name() -> &'static str {
+            "hard_users"
+        }
+        fn create_table_sql() -> String {
+            String::new()
+        }
+        fn list_columns() -> Vec<String> {
+            Vec::new()
+        }
+        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(UpdateResult::NotImplemented)
+        }
+        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        fn has_soft_delete() -> bool {
+            false
+        }
+        async fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> Result<Option<Self>, sqlx::Error>
+        where
+            E: IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(None)
+        }
+    }
+
+    #[tokio::test]
+    async fn query_builder_to_sql_includes_soft_delete_filter() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = SoftDeleteModel::find_in_pool(&pool)
+            .filter("age > 18")
+            .limit(10)
+            .offset(5);
+        let sql = query.to_sql();
+        assert!(sql.contains("FROM users"));
+        assert!(sql.contains("age > 18"));
+        assert!(sql.contains("deleted_at IS NULL"));
+        assert!(sql.contains("LIMIT 10"));
+        assert!(sql.contains("OFFSET 5"));
+    }
+
+    #[tokio::test]
+    async fn query_builder_to_sql_without_filters_has_no_where_for_hard_delete() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = HardDeleteModel::find_in_pool(&pool);
+        let sql = query.to_sql();
+        assert!(sql.contains("FROM hard_users"));
+        assert!(!sql.contains(" WHERE "));
+    }
+
+    #[tokio::test]
+    async fn query_builder_with_deleted_skips_soft_delete_filter() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = SoftDeleteModel::find_in_pool(&pool)
+            .filter("age > 18")
+            .with_deleted();
+        let sql = query.to_sql();
+        assert!(sql.contains("age > 18"));
+        assert!(!sql.contains("deleted_at IS NULL"));
+    }
+
+    #[tokio::test]
+    async fn query_builder_to_update_sql_includes_fields() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = SoftDeleteModel::find_in_pool(&pool).filter("status = 'inactive'");
+        let sql = query
+            .to_update_sql(&serde_json::json!({ "status": "active", "age": 1 }))
+            .unwrap();
+        assert!(sql.contains("UPDATE users SET"));
+        assert!(sql.contains("status"));
+        assert!(sql.contains("age"));
+        assert!(sql.contains("WHERE"));
+    }
+
+    #[tokio::test]
+    async fn query_builder_to_update_sql_rejects_non_object() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = SoftDeleteModel::find_in_pool(&pool);
+        let err = query.to_update_sql(&serde_json::json!("bad")).unwrap_err();
+        assert!(err.to_string().contains("Bulk update requires a JSON object"));
+    }
+
+    #[tokio::test]
+    async fn query_builder_to_delete_sql_soft_delete() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = SoftDeleteModel::find_in_pool(&pool).filter("id = 1");
+        let sql = query.to_delete_sql();
+        assert!(sql.starts_with("UPDATE users SET deleted_at"));
+    }
+
+    #[tokio::test]
+    async fn query_builder_to_delete_sql_hard_delete() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = HardDeleteModel::find_in_pool(&pool).filter("id = 1");
+        let sql = query.to_delete_sql();
+        assert!(sql.starts_with("DELETE FROM hard_users"));
+    }
+
+    #[test]
+    fn model_raw_sql_compiles() {
+        let _query = SoftDeleteModel::raw_sql("SELECT * FROM users");
+    }
+
+    #[test]
+    fn sqlite_placeholder_uses_question_mark() {
+        assert_eq!(Sqlite::placeholder(1), "?");
+        assert_eq!(Sqlite::placeholder(5), "?");
+    }
+
+    #[test]
+    fn sqlite_timestamp_fn_is_constant() {
+        assert_eq!(Sqlite::current_timestamp_fn(), "CURRENT_TIMESTAMP");
+    }
+
+    #[tokio::test]
+    async fn executor_execute_and_fetch() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let mut executor = Executor::Pool(&pool);
+        executor
+            .execute(sqlx::query("INSERT INTO items (name) VALUES ('a');"))
+            .await
+            .unwrap();
+
+        let mut executor = Executor::Pool(&pool);
+        let row = executor
+            .fetch_optional(sqlx::query_as::<Sqlite, (i64, String)>(
+                "SELECT id, name FROM items WHERE name = 'a'",
+            ))
+            .await
+            .unwrap();
+        let (id, name) = row.unwrap();
+        assert_eq!(name, "a");
+        assert!(id > 0);
+
+        let mut executor = Executor::Pool(&pool);
+        let rows = executor
+            .fetch_all(sqlx::query_as::<Sqlite, (i64, String)>(
+                "SELECT id, name FROM items",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn query_builder_update_executes() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, flag INTEGER, deleted_at TEXT);",
+        )
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_users (status) VALUES ('inactive');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let updated = DbModel::find_in_pool(&pool)
+            .filter("status = 'inactive'")
+            .update(serde_json::json!({ "status": "active" }))
+            .await
+            .unwrap();
+        assert_eq!(updated, 1);
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE status = 'active'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn query_builder_update_binds_bool_and_null() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, flag INTEGER, deleted_at TEXT);",
+        )
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_users (status) VALUES ('inactive');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let updated = DbModel::find_in_pool(&pool)
+            .filter("id = 1")
+            .update(serde_json::json!({ "status": "active", "flag": true, "deleted_at": null }))
+            .await
+            .unwrap();
+        assert_eq!(updated, 1);
+    }
+
+    #[tokio::test]
+    async fn query_builder_update_rejects_unsupported_type() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_users (status) VALUES ('inactive');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let err = DbModel::find_in_pool(&pool)
+            .filter("id = 1")
+            .update(serde_json::json!({ "meta": { "a": 1 } }))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Unsupported type in bulk update"));
+    }
+
+    #[tokio::test]
+    async fn query_builder_soft_delete_executes() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_users (status) VALUES ('active');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let deleted = DbModel::find_in_pool(&pool)
+            .filter("status = 'active'")
+            .delete()
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE deleted_at IS NOT NULL")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn query_builder_hard_delete_executes() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_hard_users (id INTEGER PRIMARY KEY, status TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_hard_users (status) VALUES ('active');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let deleted = DbHardModel::find_in_pool(&pool)
+            .filter("status = 'active'")
+            .delete()
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_hard_users")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn query_builder_all_with_limit_offset() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_users (status) VALUES ('a'), ('b'), ('c');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let rows = DbModel::find_in_pool(&pool)
+            .include("posts")
+            .limit(1)
+            .offset(1)
+            .all()
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn default_model_hooks_are_noops() {
+        let mut model = SoftDeleteModel {
+            id: 1,
+            status: "active".to_string(),
+            deleted_at: None,
+        };
+        model.before_save().await.unwrap();
+        model.after_save().await.unwrap();
+    }
+
+    #[test]
+    fn default_model_validation_is_ok() {
+        let model = SoftDeleteModel {
+            id: 1,
+            status: "active".to_string(),
+            deleted_at: None,
+        };
+        assert!(model.validate().is_ok());
+    }
+
+    #[tokio::test]
+    async fn eager_load_default_is_ok() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let mut models = vec![SoftDeleteModel {
+            id: 1,
+            status: "active".to_string(),
+            deleted_at: None,
+        }];
+        SoftDeleteModel::eager_load(&mut models, "posts", &pool)
+            .await
+            .unwrap();
+    }
+
+    #[test]
+    fn test_models_use_fields() {
+        let soft = SoftDeleteModel {
+            id: 1,
+            status: "active".to_string(),
+            deleted_at: None,
+        };
+        let hard = HardDeleteModel { id: 2 };
+        assert_eq!(soft.id, 1);
+        assert_eq!(soft.status, "active");
+        assert!(soft.deleted_at.is_none());
+        assert_eq!(hard.id, 2);
+    }
+}

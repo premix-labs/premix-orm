@@ -77,4 +77,5 @@ rustc-ice-*.txt
 # Reports & Docs
 # ===================
 coverage/
+build_rs_cov.profraw
 orm-book/book/

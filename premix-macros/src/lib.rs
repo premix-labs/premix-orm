@@ -24,6 +24,94 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn generate_generic_impl_includes_table_and_columns() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+                version: i32,
+                deleted_at: Option<String>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("CREATE TABLE IF NOT EXISTS"));
+        assert!(tokens.contains("users"));
+        assert!(tokens.contains("deleted_at"));
+        assert!(tokens.contains("version"));
+    }
+
+    #[test]
+    fn generate_generic_impl_rejects_tuple_struct() {
+        let input: DeriveInput = parse_quote! {
+            struct User(i32, String);
+        };
+        let err = generate_generic_impl(&input).unwrap_err();
+        assert!(err.to_string().contains("named fields"));
+    }
+
+    #[test]
+    fn generate_generic_impl_rejects_non_struct() {
+        let input: DeriveInput = parse_quote! {
+            enum User {
+                A,
+                B,
+            }
+        };
+        let err = generate_generic_impl(&input).unwrap_err();
+        assert!(err.to_string().contains("only supports structs"));
+    }
+
+    #[test]
+    fn generate_generic_impl_version_update_branch() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                version: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("version = version + 1"));
+    }
+
+    #[test]
+    fn generate_generic_impl_no_version_branch() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(!tokens.contains("version = version + 1"));
+    }
+
+    #[test]
+    fn is_ignored_detects_attribute() {
+        let field: Field = parse_quote! {
+            #[premix(ignore)]
+            ignored: Option<String>
+        };
+        assert!(is_ignored(&field));
+    }
+
+    #[test]
+    fn is_ignored_false_for_other_attrs() {
+        let field: Field = parse_quote! {
+            #[serde(skip)]
+            name: String
+        };
+        assert!(!is_ignored(&field));
+    }
+
+}
+
 fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_name = &input.ident;
     let table_name = struct_name.to_string().to_lowercase() + "s";
