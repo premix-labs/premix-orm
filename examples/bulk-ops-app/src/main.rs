@@ -63,6 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Remaining users: {}", remaining);
     assert_eq!(remaining, 7); // 10 - 3 = 7
 
-    println!("\n✅ Bulk Operations Verified Successfully!");
+    println!("\n[OK] Bulk Operations Verified Successfully!");
     Ok(())
 }

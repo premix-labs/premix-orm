@@ -10,17 +10,17 @@ function Write-Header {
 
 function Write-Step {
     param($Text)
-    Write-Host "`n➜ $Text" -ForegroundColor Yellow
+    Write-Host "`n>> $Text" -ForegroundColor Yellow
 }
 
 function Write-Success {
     param($Text)
-    Write-Host "✅ $Text" -ForegroundColor Green
+    Write-Host "[OK] $Text" -ForegroundColor Green
 }
 
 function Write-Fail {
     param($Text)
-    Write-Host "❌ $Text" -ForegroundColor Red
+    Write-Host "[FAIL] $Text" -ForegroundColor Red
 }
 
 try {
@@ -69,7 +69,7 @@ try {
     }
 }
 catch {
-    Write-Host "`n❌ FATAL ERROR: $_" -ForegroundColor Red
+    Write-Host "`n[FATAL ERROR]: $_" -ForegroundColor Red
     exit 1
 }
 

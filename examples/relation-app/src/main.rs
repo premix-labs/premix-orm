@@ -68,6 +68,6 @@ async fn main() -> Result<(), sqlx::Error> {
         println!("- Orphan post?");
     }
 
-    println!("\n✅ Relation Test Passed!");
+    println!("\n[OK] Relation Test Passed!");
     Ok(())
 }

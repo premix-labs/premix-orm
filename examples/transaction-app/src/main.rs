@@ -28,10 +28,10 @@ async fn main() -> Result<(), sqlx::Error> {
     };
     acc1.save(&pool).await?;
     acc2.save(&pool).await?;
-    println!("✅ Initial State: Alice=1000, Bob=500");
+    println!("[OK] Initial State: Alice=1000, Bob=500");
 
     // 1. Successful Transaction (Manual Pattern - Recommended by sqlx)
-    println!("\n🔄 Executing Transfer (100 from Alice to Bob)...");
+    println!("\n>> Executing Transfer (100 from Alice to Bob)...");
     {
         let mut tx = pool.begin().await?;
 
@@ -55,15 +55,15 @@ async fn main() -> Result<(), sqlx::Error> {
 
         tx.commit().await?;
     }
-    println!("✅ Transaction Committed");
+    println!("[OK] Transaction Committed");
 
     // Verify
     let log = Account::find_by_id(&pool, 3).await?;
     assert!(log.is_some(), "Log should exist");
-    println!("✅ Verified: Log exists.");
+    println!("[OK] Verified: Log exists.");
 
     // 2. Rollback Transaction (Error causes automatic rollback on drop)
-    println!("\n🔄 Executing Faulty Transaction (Should Rollback)...");
+    println!("\n>> Executing Faulty Transaction (Should Rollback)...");
     let result: Result<(), sqlx::Error> = async {
         let mut tx = pool.begin().await?;
 
@@ -80,12 +80,12 @@ async fn main() -> Result<(), sqlx::Error> {
     .await;
 
     assert!(result.is_err());
-    println!("✅ Transaction Error Caught");
+    println!("[OK] Transaction Error Caught");
 
     // Verify Rollback
     let log_fail = Account::find_by_id(&pool, 4).await?;
     assert!(log_fail.is_none(), "FailLog should NOT exist");
-    println!("✅ Verified: FailLog rolled back.");
+    println!("[OK] Verified: FailLog rolled back.");
 
     Ok(())
 }

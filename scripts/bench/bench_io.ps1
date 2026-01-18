@@ -10,17 +10,17 @@ function Write-Header {
 
 function Write-Step {
     param($Text)
-    Write-Host "`n➜ $Text" -ForegroundColor Yellow
+    Write-Host "`n>> $Text" -ForegroundColor Yellow
 }
 
 function Write-Success {
     param($Text)
-    Write-Host "✅ $Text" -ForegroundColor Green
+    Write-Host "[OK] $Text" -ForegroundColor Green
 }
 
 function Test-Psql {
     if (-not (Get-Command psql -ErrorAction SilentlyContinue)) {
-        Write-Host "⚠️ psql not found. Cannot verify database existence automatically." -ForegroundColor DarkGray
+        Write-Host "[WARN] psql not found. Cannot verify database existence automatically." -ForegroundColor DarkGray
         return $false
     }
     return $true
@@ -70,7 +70,7 @@ try {
     Write-Header "BENCHMARK SUITE COMPLETE in $($sw.Elapsed.TotalSeconds.ToString("N2"))s"
 }
 catch {
-    Write-Host "`n❌ FAILED: $_" -ForegroundColor Red
+    Write-Host "`n[FAILED] $_" -ForegroundColor Red
     exit 1
 }
 

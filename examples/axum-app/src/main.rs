@@ -29,10 +29,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A. Setup Database
     let pool = SqlitePool::connect("sqlite::memory:").await?;
 
-    // B. Auto Migration (The Magic 🔮)
-    println!("🚀 Starting Premix Auto-Migration...");
+    // B. Auto Migration (The Magic)
+    println!(">> Starting Premix Auto-Migration...");
     Premix::sync::<sqlx::Sqlite, User>(&pool).await?;
-    println!("✅ Database Synced!");
+    println!("[OK] Database Synced!");
 
     // C. Setup Axum Router
     let shared_state = Arc::new(AppState { pool });
@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // D. Run Server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    println!("🌍 Server running at http://localhost:3000");
+    println!(">> Server running at http://localhost:3000");
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -54,7 +54,7 @@ async fn create_user(
     State(state): State<Arc<AppState>>,
     Json(mut payload): Json<User>,
 ) -> Result<Json<User>, StatusCode> {
-    println!("📝 Saving user: {:?}", payload);
+    println!(">> Saving user: {:?}", payload);
 
     // Use Premix Save!
     match payload.save(&state.pool).await {

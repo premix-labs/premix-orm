@@ -52,17 +52,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Init => {
-            println!("🚀 Initializing Premix project...");
-            println!("✅ Done. You can now use #[derive(Model)] in your structs.");
+            println!(">> Initializing Premix project...");
+            println!("[OK] Done. You can now use #[derive(Model)] in your structs.");
         }
         Commands::Sync { database } => {
-            println!("🔍 Scanning for models...");
+            println!(">> Scanning for models...");
             let db_url = database
                 .or_else(|| std::env::var("DATABASE_URL").ok())
                 .unwrap_or_else(|| "sqlite:premix.db".to_string());
-            println!("📡 Connecting to {}...", db_url);
+            println!(">> Connecting to {}...", db_url);
             println!(
-                "⚠️ CLI Sync is under construction. Please use Premix::sync::<Model>(&pool) in code."
+                "[WARN] CLI Sync is under construction. Please use Premix::sync::<Model>(&pool) in code."
             );
         }
         Commands::Migrate { action } => match action {
@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if !dir_path.exists() {
                     fs::create_dir(dir_path)?;
-                    println!("📂 Created 'migrations' directory.");
+                    println!(">> Created 'migrations' directory.");
                 }
 
                 let file_path = dir_path.join(&filename);
@@ -88,14 +88,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
                 file.write_all(content.as_bytes())?;
-                println!("✅ Created migration: migrations/{}", filename);
+                println!("[OK] Created migration: migrations/{}", filename);
             }
             MigrateAction::Up { database } => {
                 let db_url = database
                     .or_else(|| std::env::var("DATABASE_URL").ok())
                     .unwrap_or_else(|| "sqlite:premix.db".to_string());
 
-                println!("📡 Connecting to {}...", db_url);
+                println!(">> Connecting to {}...", db_url);
 
                 // For MVP: Support SQLite only in CLI initially
                 let options = SqliteConnectOptions::from_str(&db_url)?.create_if_missing(true);
@@ -103,13 +103,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let migrations = load_migrations("migrations")?;
                 if migrations.is_empty() {
-                    println!("✨ No migrations found.");
+                    println!("[INFO] No migrations found.");
                     return Ok(());
                 }
 
                 let migrator = Migrator::new(pool);
                 migrator.run(migrations).await?;
-                println!("✅ Migrations up to date.");
+                println!("[OK] Migrations up to date.");
             }
             MigrateAction::Down => {
                 println!("Start Reverting... (Not implemented yet)");

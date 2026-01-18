@@ -10,12 +10,12 @@ function Write-Header {
 
 function Write-Step {
     param($Text)
-    Write-Host "`n➜ $Text" -ForegroundColor Yellow
+    Write-Host "`n>> $Text" -ForegroundColor Yellow
 }
 
 function Write-Success {
     param($Text)
-    Write-Host "✅ $Text" -ForegroundColor Green
+    Write-Host "[OK] $Text" -ForegroundColor Green
 }
 
 try {
@@ -36,18 +36,18 @@ try {
             Write-Success "Book built in orm-book/book"
         }
         else {
-            Write-Host "⚠️ 'orm-book' directory not found." -ForegroundColor DarkGray
+            Write-Host "[WARN] 'orm-book' directory not found." -ForegroundColor DarkGray
         }
     }
     else {
-        Write-Host "⚠️ mdBook not installed (Skipping)." -ForegroundColor DarkGray
+        Write-Host "[WARN] mdBook not installed (Skipping)." -ForegroundColor DarkGray
     }
 
     $sw.Stop()
     Write-Header "DOCS GENERATED in $($sw.Elapsed.TotalSeconds.ToString("N2"))s"
 }
 catch {
-    Write-Host "`n❌ FAILED: $_" -ForegroundColor Red
+    Write-Host "`n[FAILED] $_" -ForegroundColor Red
     exit 1
 }
 

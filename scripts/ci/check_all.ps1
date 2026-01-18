@@ -10,12 +10,12 @@ function Write-Header {
 
 function Write-Step {
     param($Text)
-    Write-Host "`n➜ $Text" -ForegroundColor Yellow
+    Write-Host "`n>> $Text" -ForegroundColor Yellow
 }
 
 function Write-Success {
     param($Text)
-    Write-Host "✅ $Text" -ForegroundColor Green
+    Write-Host "[OK] $Text" -ForegroundColor Green
 }
 
 try {
@@ -43,7 +43,7 @@ try {
     Write-Header "ALL CHECKS PASSED in $($sw.Elapsed.TotalSeconds.ToString("N2"))s"
 }
 catch {
-    Write-Host "`n❌ FAILED: $_" -ForegroundColor Red
+    Write-Host "`n[FAILED] $_" -ForegroundColor Red
     exit 1
 }
 

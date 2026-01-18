@@ -11,7 +11,7 @@ struct User {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔍 Validation Demo\n");
+    println!(">> Validation Demo\n");
 
     // Valid user
     let valid_user = User {
@@ -22,9 +22,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     match valid_user.validate() {
-        Ok(_) => println!("✅ Valid user: {:?}", valid_user),
+        Ok(_) => println!("[OK] Valid user: {:?}", valid_user),
         Err(errors) => {
-            println!("❌ Validation errors:");
+            println!("[FAIL] Validation errors:");
             for e in errors {
                 println!("  - {}: {}", e.field, e.message);
             }
@@ -40,16 +40,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     match invalid_user.validate() {
-        Ok(_) => println!("\n✅ User passed validation (rules not yet implemented via attributes)"),
+        Ok(_) => {
+            println!("\n[OK] User passed validation (rules not yet implemented via attributes)")
+        }
         Err(errors) => {
-            println!("\n❌ Validation errors:");
+            println!("\n[FAIL] Validation errors:");
             for e in errors {
                 println!("  - {}: {}", e.field, e.message);
             }
         }
     }
 
-    println!("\n🎉 Validation Demo Complete!");
+    println!("\n[DONE] Validation Demo Complete!");
     println!("\nNote: Add validation rules using attributes like:");
     println!("  #[premix(email)]");
     println!("  #[premix(min_len = 3, max_len = 50)]");

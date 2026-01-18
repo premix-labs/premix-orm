@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         raw_user.deleted_at
     );
 
-    println!("✅ All Soft Delete tests passed!");
+    println!("[OK] All Soft Delete tests passed!");
 
     Ok(())
 }

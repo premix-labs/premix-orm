@@ -20,7 +20,7 @@ async fn main() -> Result<(), sqlx::Error> {
 
     // 3. Execute the command on the database
     sqlx::query(&sql).execute(&pool).await?;
-    println!("✅ Table created successfully!");
+    println!("[OK] Table created successfully!");
 
     // 4. Test Active Record: save()
     let mut user = User {
@@ -31,19 +31,19 @@ async fn main() -> Result<(), sqlx::Error> {
 
     // Call the generated method!
     user.save(&pool).await?;
-    println!("✅ Row inserted via Active Record!");
+    println!("[OK] Row inserted via Active Record!");
 
     // 5. Test Active Record: find_by_id()
     let found_user = User::find_by_id(&pool, 1).await?;
     if let Some(u) = found_user {
-        println!("✅ Found user: {} (ID: {})", u.name, u.id);
+        println!("[OK] Found user: {} (ID: {})", u.name, u.id);
     } else {
-        println!("❌ User not found!");
+        println!("[FAIL] User not found!");
     }
 
-    println!("🔄 Syncing Database...");
+    println!(">> Syncing Database...");
     Premix::sync::<sqlx::Sqlite, User>(&pool).await?;
-    println!("✅ Database Synced!");
+    println!("[OK] Database Synced!");
 
     Ok(())
 }
