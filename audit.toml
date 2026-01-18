@@ -1,0 +1,18 @@
+# Audit Configuration for Premix ORM
+# This file allows us to ignore vulnerabilities that are unfixable upstream 
+# or isolated to benchmark/dev dependencies.
+
+[advisories]
+ignore = [
+    # Marvin Attack in rsa (via sqlx-mysql). No fixed upgrade available for rsa 0.9.x.
+    # We accept this risk for MySQL support until sqlx updates rsa.
+    "RUSTSEC-2023-0071",
+
+    # rustls-pemfile is unmaintained (via rbatis/rbdc). 
+    # Used only in benchmarks.
+    "RUSTSEC-2025-0134",
+
+    # lru soundness issue (via rbatis/rbdc).
+    # Used only in benchmarks.
+    "RUSTSEC-2026-0002",
+]

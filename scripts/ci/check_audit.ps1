@@ -33,9 +33,15 @@ try {
     Set-Location "$ScriptRoot/../.."
 
     Write-Step "Running cargo audit..."
-    cargo audit
+    # We ignore:
+    # 1. RUSTSEC-2023-0071: RSA Marvin attack (sqlx-mysql/rsa). No fix for rsa 0.9.x.
+    # 2. RUSTSEC-2025-0134: rustls-pemfile unmaintained (benchmarks/rbatis).
+    # 3. RUSTSEC-2026-0002: lru unsoundness (benchmarks/rbatis).
+    cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2025-0134 --ignore RUSTSEC-2026-0002
+    if ($LASTEXITCODE -ne 0) { throw "Security vulnerabilities found." }
 
     $sw.Stop()
+    Write-Host "[OK] Audit passed successfully." -ForegroundColor Green
     Write-Header "AUDIT PASSED in $($sw.Elapsed.TotalSeconds.ToString("N2"))s"
 }
 catch {

@@ -33,7 +33,8 @@ try {
     Set-Location "$ScriptRoot/../.."
 
     Write-Step "Running Tarpaulin..."
-    cargo tarpaulin --out Html --output-dir coverage --exclude-files benchmarks/* --exclude-files examples/*
+    # Note: Doctests are currently disabled due to a known rustdoc issue on Windows with Tarpaulin.
+    cargo tarpaulin --out Html --output-dir coverage --all-targets --exclude-files benchmarks/* --exclude-files examples/*
 
     $sw.Stop()
     Write-Header "COVERAGE REPORT GENERATED in $($sw.Elapsed.TotalSeconds.ToString("N2"))s"

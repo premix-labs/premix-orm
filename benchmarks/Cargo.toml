@@ -29,8 +29,8 @@ sea-orm = { version = "1.1.19", features = [
 ] }
 rbatis = "4.6.15"
 rbs = "4.6.0"
-rbdc-sqlite = "4.6.0"
-rbdc-pg = "4.6.0"
+rbdc-sqlite = "4.6.2"
+rbdc-pg = "4.6.3"
 
 
 [[bench]]
