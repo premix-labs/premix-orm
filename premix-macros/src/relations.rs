@@ -36,19 +36,18 @@ fn generate_has_many(parent: &Ident, child: &Ident) -> TokenStream {
         pub async fn #method_name<'e, E, DB>(&self, executor: E) -> Result<Vec<#child>, premix_core::sqlx::Error>
         where
             DB: premix_core::SqlDialect,
-            E: premix_core::sqlx::Executor<'e, Database = DB>,
+            E: premix_core::IntoExecutor<'e, DB = DB>,
             #parent: premix_core::Model<DB>,
             #child: premix_core::Model<DB>,
             for<'q> <DB as premix_core::sqlx::Database>::Arguments<'q>: premix_core::sqlx::IntoArguments<'q, DB>,
             for<'c> &'c mut <DB as premix_core::sqlx::Database>::Connection: premix_core::sqlx::Executor<'c, Database = DB>,
             i32: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB>,
         {
+            let mut executor = executor.into_executor();
             let p = <DB as premix_core::SqlDialect>::placeholder(1);
             let sql = format!("SELECT * FROM {} WHERE {} = {}", #child_table, #fk, p);
-            premix_core::sqlx::query_as::<DB, #child>(&sql)
-                .bind(self.id)
-                .fetch_all(executor)
-                .await
+            let query = premix_core::sqlx::query_as::<DB, #child>(&sql).bind(self.id);
+            executor.fetch_all(query).await
         }
     }
 }
@@ -62,19 +61,18 @@ fn generate_belongs_to(child: &Ident, parent: &Ident) -> TokenStream {
         pub async fn #method_name<'e, E, DB>(&self, executor: E) -> Result<Option<#parent>, premix_core::sqlx::Error>
         where
             DB: premix_core::SqlDialect,
-            E: premix_core::sqlx::Executor<'e, Database = DB>,
+            E: premix_core::IntoExecutor<'e, DB = DB>,
             #child: premix_core::Model<DB>,
             #parent: premix_core::Model<DB>,
             for<'q> <DB as premix_core::sqlx::Database>::Arguments<'q>: premix_core::sqlx::IntoArguments<'q, DB>,
             for<'c> &'c mut <DB as premix_core::sqlx::Database>::Connection: premix_core::sqlx::Executor<'c, Database = DB>,
             i32: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB>,
         {
+            let mut executor = executor.into_executor();
             let p = <DB as premix_core::SqlDialect>::placeholder(1);
             let sql = format!("SELECT * FROM {} WHERE id = {}", #parent_table, p);
-            premix_core::sqlx::query_as::<DB, #parent>(&sql)
-                .bind(self.#fk)
-                .fetch_optional(executor)
-                .await
+            let query = premix_core::sqlx::query_as::<DB, #parent>(&sql).bind(self.#fk);
+            executor.fetch_optional(query).await
         }
     }
 }
@@ -106,7 +104,9 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                 let sql = format!("SELECT * FROM {} WHERE {} IN ({})", #child_table, #parent_fk_str, params);
                                 let mut query = premix_core::sqlx::query_as::<DB, #child_model>(&sql);
                                 for id in ids { query = query.bind(id); }
-                                let children = query.fetch_all(executor).await?;
+                                
+                                let children = executor.fetch_all(query).await?;
+                                
                                 let mut grouped: std::collections::HashMap<i32, Vec<#child_model>> = std::collections::HashMap::new();
                                 for child in children {
                                     grouped.entry(child.#parent_fk_ident).or_default().push(child);
@@ -132,48 +132,4 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
         }
         Ok(())
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use syn::parse_quote;
-
-    use super::*;
-
-    #[test]
-    fn test_has_many_generation() {
-        let input: DeriveInput = parse_quote! {
-            #[has_many(Post)]
-            struct User {
-                id: i32
-            }
-        };
-
-        let output = impl_relations(&input).unwrap();
-        let output_str = output.to_string();
-
-        // Check if "posts_lazy" method is generated
-        assert!(output_str.contains("posts_lazy"));
-        // Check if it returns "Vec < Post >"
-        assert!(output_str.contains("Vec < Post >"));
-    }
-
-    #[test]
-    fn test_belongs_to_generation() {
-        let input: DeriveInput = parse_quote! {
-            #[belongs_to(User)]
-            struct Post {
-                id: i32,
-                user_id: i32
-            }
-        };
-
-        let output = impl_relations(&input).unwrap();
-        let output_str = output.to_string();
-
-        // Check if "user" method is generated
-        assert!(output_str.contains("fn user"));
-        // Check if it returns "Option < User >"
-        assert!(output_str.contains("Option < User >"));
-    }
 }

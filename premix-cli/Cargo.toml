@@ -1,9 +1,10 @@
 [package]
 name = "premix-cli"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "Command-line tool for Premix ORM (Migration management and more)."
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/premix-labs/premix-orm"
 keywords = ["orm", "cli", "database", "migration"]
 categories = ["database", "development-tools::cargo-plugins"]

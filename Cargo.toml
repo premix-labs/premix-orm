@@ -16,6 +16,8 @@ members = [
     "examples/soft-delete-app",
     "examples/bulk-ops-app",
     "premix-cli",
+    "examples/premix-axum-tutorial",
+    "premix-orm",
 ]
 
 [workspace.lints.clippy]

@@ -1,0 +1,53 @@
+### ========================================
+### PREMIX ORM: AXUM TUTORIAL API TESTS
+### ========================================
+
+### 1. List All Users (Initially Empty)
+GET http://127.0.0.1:3000/users
+
+### 2. Create User - Alice
+POST http://127.0.0.1:3000/users
+Content-Type: application/json
+
+{
+  "name": "Alice",
+  "email": "alice@premix.io"
+}
+
+### 3. Create User - Bob
+POST http://127.0.0.1:3000/users
+Content-Type: application/json
+
+{
+  "name": "Bob",
+  "email": "bob@premix.io"
+}
+
+### 4. List All Users (Should have 2)
+GET http://127.0.0.1:3000/users
+
+### 5. Get User by ID (Alice = 0)
+GET http://127.0.0.1:3000/users/0
+
+### 6. Get Non-existent User (Expect 404)
+GET http://127.0.0.1:3000/users/9999
+
+### 7. Update User - Change Alice's Name
+PUT http://127.0.0.1:3000/users/0
+Content-Type: application/json
+
+{
+  "name": "Alice Updated"
+}
+
+### 8. Verify Update (Get Alice Again)
+GET http://127.0.0.1:3000/users/0
+
+### 9. Delete User - Bob (ID = 1)
+DELETE http://127.0.0.1:3000/users/1
+
+### 10. Verify Deletion (Expect 404)
+GET http://127.0.0.1:3000/users/1
+
+### 11. List All Users After Delete (Should have 1)
+GET http://127.0.0.1:3000/users

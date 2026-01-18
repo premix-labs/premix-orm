@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-01-18
+
+### Added 🚀
+- **Facade Crate (`premix-orm`):** Introduced a unified entry point crate. Users can now depend solely on `premix-orm` instead of managing `premix-core` and `premix-macros` separately.
+- **Documentation:** Added `README.md` for `premix-core`, `premix-macros`, and `premix-cli` to ensure proper display on crates.io.
+
+### Fixed 🐛
+- **Auto-Increment IDs:** Fixed a critical bug in `save()` where explicitly setting ID to 0 prevented the database from auto-generating IDs. The macro now correctly excludes the ID column on insert and retrieves the `last_insert_id`.
+- **Executor API:** Resolved type inference ambiguities in `IntoExecutor` for multi-database contexts.
+
+
 ## [1.0.0] - 2026-01-18
 
 ### Added 🚀

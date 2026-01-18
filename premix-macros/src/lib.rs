@@ -70,13 +70,18 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
     let update_impl = if has_version {
         quote! {
-            async fn update(&mut self, mut executor: premix_core::Executor<'_, DB>) -> Result<premix_core::UpdateResult, premix_core::sqlx::Error> {
+            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_core::UpdateResult, premix_core::sqlx::Error>
+            where
+                E: premix_core::IntoExecutor<'a, DB = DB>
+            {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
                 let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_core::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
                 let id_p = <DB as premix_core::SqlDialect>::placeholder(1 + #field_idents_len);
                 let ver_p = <DB as premix_core::SqlDialect>::placeholder(2 + #field_idents_len);
                 let sql = format!(
                     "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
-                    #table_name, set_clause, id_p, ver_p
+                    table_name, set_clause, id_p, ver_p
                 );
 
                 let mut query = premix_core::sqlx::query::<DB>(&sql)
@@ -84,19 +89,13 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     .bind(&self.id)
                     .bind(&self.version);
 
-                let result = match &mut executor {
-                    premix_core::Executor::Pool(pool) => query.execute(*pool).await?,
-                    premix_core::Executor::Conn(conn) => query.execute(&mut **conn).await?,
-                };
+                let result = executor.execute(query).await?;
 
                 if <DB as premix_core::SqlDialect>::rows_affected(&result) == 0 {
                     let exists_p = <DB as premix_core::SqlDialect>::placeholder(1);
-                    let exists_sql = format!("SELECT id FROM {} WHERE id = {}", #table_name, exists_p);
-                    let exists_query = premix_core::sqlx::query::<DB>(&exists_sql).bind(&self.id);
-                    let exists = match &mut executor {
-                        premix_core::Executor::Pool(pool) => exists_query.fetch_optional(*pool).await?,
-                        premix_core::Executor::Conn(conn) => exists_query.fetch_optional(&mut **conn).await?,
-                    };
+                    let exists_sql = format!("SELECT id FROM {} WHERE id = {}", table_name, exists_p);
+                    let exists_query = premix_core::sqlx::query_as::<DB, Self>(&exists_sql).bind(&self.id);
+                    let exists = executor.fetch_optional(exists_query).await?;
 
                     if exists.is_none() {
                         Ok(premix_core::UpdateResult::NotFound)
@@ -111,19 +110,21 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         }
     } else {
         quote! {
-            async fn update(&mut self, mut executor: premix_core::Executor<'_, DB>) -> Result<premix_core::UpdateResult, premix_core::sqlx::Error> {
+            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_core::UpdateResult, premix_core::sqlx::Error>
+            where
+                E: premix_core::IntoExecutor<'a, DB = DB>
+            {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
                 let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_core::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
                 let id_p = <DB as premix_core::SqlDialect>::placeholder(1 + #field_idents_len);
-                let sql = format!("UPDATE {} SET {} WHERE id = {}", #table_name, set_clause, id_p);
+                let sql = format!("UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
 
                 let mut query = premix_core::sqlx::query::<DB>(&sql)
                     #( .bind(&self.#field_idents) )*
                     .bind(&self.id);
 
-                let result = match &mut executor {
-                    premix_core::Executor::Pool(pool) => query.execute(*pool).await?,
-                    premix_core::Executor::Conn(conn) => query.execute(&mut **conn).await?,
-                };
+                let result = executor.execute(query).await?;
 
                 if <DB as premix_core::SqlDialect>::rows_affected(&result) == 0 {
                     Ok(premix_core::UpdateResult::NotFound)
@@ -136,17 +137,18 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
     let delete_impl = if has_soft_delete {
         quote! {
-            async fn delete(&mut self, mut executor: premix_core::Executor<'_, DB>) -> Result<(), premix_core::sqlx::Error> {
+            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_core::sqlx::Error>
+            where
+                E: premix_core::IntoExecutor<'a, DB = DB>
+            {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
                 let id_p = <DB as premix_core::SqlDialect>::placeholder(1);
-                let sql = format!("UPDATE {} SET deleted_at = {} WHERE id = {}", #table_name, <DB as premix_core::SqlDialect>::current_timestamp_fn(), id_p);
-                match &mut executor {
-                    premix_core::Executor::Pool(pool) => {
-                        premix_core::sqlx::query::<DB>(&sql).bind(&self.id).execute(*pool).await?;
-                    }
-                    premix_core::Executor::Conn(conn) => {
-                        premix_core::sqlx::query::<DB>(&sql).bind(&self.id).execute(&mut **conn).await?;
-                    }
-                }
+                let sql = format!("UPDATE {} SET deleted_at = {} WHERE id = {}", table_name, <DB as premix_core::SqlDialect>::current_timestamp_fn(), id_p);
+
+                let query = premix_core::sqlx::query::<DB>(&sql).bind(&self.id);
+                executor.execute(query).await?;
+
                 self.deleted_at = Some("DELETED".to_string());
                 Ok(())
             }
@@ -154,17 +156,18 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         }
     } else {
         quote! {
-            async fn delete(&mut self, mut executor: premix_core::Executor<'_, DB>) -> Result<(), premix_core::sqlx::Error> {
+            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_core::sqlx::Error>
+            where
+                E: premix_core::IntoExecutor<'a, DB = DB>
+            {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
                 let id_p = <DB as premix_core::SqlDialect>::placeholder(1);
-                let sql = format!("DELETE FROM {} WHERE id = {}", #table_name, id_p);
-                match &mut executor {
-                    premix_core::Executor::Pool(pool) => {
-                        premix_core::sqlx::query::<DB>(&sql).bind(&self.id).execute(*pool).await?;
-                    }
-                    premix_core::Executor::Conn(conn) => {
-                        premix_core::sqlx::query::<DB>(&sql).bind(&self.id).execute(&mut **conn).await?;
-                    }
-                }
+                let sql = format!("DELETE FROM {} WHERE id = {}", table_name, id_p);
+
+                let query = premix_core::sqlx::query::<DB>(&sql).bind(&self.id);
+                executor.execute(query).await?;
+
                 Ok(())
             }
             fn has_soft_delete() -> bool { false }
@@ -206,6 +209,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             }
         }
 
+        #[premix_core::async_trait::async_trait]
         impl<DB> premix_core::Model<DB> for #struct_name
         where
             DB: premix_core::SqlDialect,
@@ -249,19 +253,45 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 vec![ #( #field_names.to_string() ),* ]
             }
 
-            async fn save<'e, E>(&mut self, executor: E) -> Result<(), premix_core::sqlx::Error>
+            async fn save<'a, E>(&mut self, executor: E) -> Result<(), premix_core::sqlx::Error>
             where
-                E: premix_core::sqlx::Executor<'e, Database = DB>
+                E: premix_core::IntoExecutor<'a, DB = DB>
             {
+                let mut executor = executor.into_executor();
                 use premix_core::ModelHooks;
                 self.before_save().await?;
 
-                let binds = (1..=#field_idents_len).map(|i| <DB as premix_core::SqlDialect>::placeholder(i)).collect::<Vec<_>>().join(", ");
-                let sql = format!("INSERT INTO {} ({}) VALUES ({})", #table_name, vec![ #( #field_names ),* ].join(", "), binds);
+                // Filter out 'id' and 'version' for INSERT
+                let columns: Vec<&str> = vec![ #( #field_names ),* ]
+                    .into_iter()
+                    .filter(|&c| c != "id" && c != "version" && c != "deleted_at")
+                    .collect();
 
-                premix_core::sqlx::query::<DB>(&sql)
-                    #( .bind(&self.#field_idents) )*
-                    .execute(executor).await?;
+                let placeholders = (1..=columns.len())
+                    .map(|i| <DB as premix_core::SqlDialect>::placeholder(i))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let sql = format!("INSERT INTO {} ({}) VALUES ({})", #table_name, columns.join(", "), placeholders);
+
+                let mut query = premix_core::sqlx::query::<DB>(&sql);
+
+                // Bind only non-id/version fields
+                #(
+                    if #field_names != "id" && #field_names != "version" && #field_names != "deleted_at" {
+                        query = query.bind(&self.#field_idents);
+                    }
+                )*
+
+                let result = executor.execute(query).await?;
+
+                // Set the ID if it's 0 (new record)
+                if self.id == 0 {
+                    let last_id = <DB as premix_core::SqlDialect>::last_insert_id(&result);
+                    if last_id > 0 {
+                         self.id = last_id as i32;
+                    }
+                }
 
                 self.after_save().await?;
                 Ok(())
@@ -270,26 +300,27 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             #update_impl
             #delete_impl
 
-            async fn find_by_id<'e, E>(executor: E, id: i32) -> Result<Option<Self>, premix_core::sqlx::Error>
+            async fn find_by_id<'a, E>(executor: E, id: i32) -> Result<Option<Self>, premix_core::sqlx::Error>
             where
-                E: premix_core::sqlx::Executor<'e, Database = DB>
+                E: premix_core::IntoExecutor<'a, DB = DB>
             {
+                let mut executor = executor.into_executor();
                 let p = <DB as premix_core::SqlDialect>::placeholder(1);
                 let mut where_clause = format!("WHERE id = {}", p);
                 if Self::has_soft_delete() {
                     where_clause.push_str(" AND deleted_at IS NULL");
                 }
                 let sql = format!("SELECT * FROM {} {} LIMIT 1", #table_name, where_clause);
-                premix_core::sqlx::query_as::<DB, Self>(&sql)
-                    .bind(id)
-                    .fetch_optional(executor)
-                    .await
+                let query = premix_core::sqlx::query_as::<DB, Self>(&sql).bind(id);
+
+                executor.fetch_optional(query).await
             }
 
-            async fn eager_load<'e, E>(models: &mut [Self], relation: &str, executor: E) -> Result<(), premix_core::sqlx::Error>
+            async fn eager_load<'a, E>(models: &mut [Self], relation: &str, executor: E) -> Result<(), premix_core::sqlx::Error>
             where
-                E: premix_core::sqlx::Executor<'e, Database = DB>
+                E: premix_core::IntoExecutor<'a, DB = DB>
             {
+                let mut executor = executor.into_executor();
                 #eager_load_body
             }
         }

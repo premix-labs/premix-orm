@@ -1,3 +1,4 @@
+pub use async_trait;
 pub use sqlx;
 use sqlx::{Database, Executor as SqlxExecutor, IntoArguments};
 
@@ -7,10 +8,14 @@ pub use migrator::{Migration, Migrator};
 
 // Chapter 18: Multi-Database Support
 // We define a trait that encapsulates all the requirements for a database to work with Premix.
-pub trait SqlDialect: Database + Sized {
+pub trait SqlDialect: Database + Sized + Send + Sync
+where
+    Self::Connection: Send,
+{
     fn placeholder(n: usize) -> String;
     fn auto_increment_pk() -> &'static str;
     fn rows_affected(res: &Self::QueryResult) -> u64;
+    fn last_insert_id(res: &Self::QueryResult) -> i64;
 
     fn current_timestamp_fn() -> &'static str {
         "CURRENT_TIMESTAMP"
@@ -40,6 +45,9 @@ impl SqlDialect for sqlx::Sqlite {
     fn rows_affected(res: &sqlx::sqlite::SqliteQueryResult) -> u64 {
         res.rows_affected()
     }
+    fn last_insert_id(res: &sqlx::sqlite::SqliteQueryResult) -> i64 {
+        res.last_insert_rowid()
+    }
 }
 
 #[cfg(feature = "postgres")]
@@ -52,6 +60,9 @@ impl SqlDialect for sqlx::Postgres {
     }
     fn rows_affected(res: &sqlx::postgres::PgQueryResult) -> u64 {
         res.rows_affected()
+    }
+    fn last_insert_id(_res: &sqlx::postgres::PgQueryResult) -> i64 {
+        0
     }
 }
 
@@ -74,19 +85,118 @@ pub enum Executor<'a, DB: Database> {
     Conn(&'a mut DB::Connection),
 }
 
+unsafe impl<'a, DB: Database> Send for Executor<'a, DB> where DB::Connection: Send {}
+unsafe impl<'a, DB: Database> Sync for Executor<'a, DB> where DB::Connection: Sync {}
+
+impl<'a, DB: Database> From<&'a sqlx::Pool<DB>> for Executor<'a, DB> {
+    fn from(pool: &'a sqlx::Pool<DB>) -> Self {
+        Self::Pool(pool)
+    }
+}
+
+impl<'a, DB: Database> From<&'a mut DB::Connection> for Executor<'a, DB> {
+    fn from(conn: &'a mut DB::Connection) -> Self {
+        Self::Conn(conn)
+    }
+}
+
+pub trait IntoExecutor<'a>: Send + 'a {
+    type DB: SqlDialect;
+    fn into_executor(self) -> Executor<'a, Self::DB>;
+}
+
+impl<'a, DB: SqlDialect> IntoExecutor<'a> for &'a sqlx::Pool<DB> {
+    type DB = DB;
+    fn into_executor(self) -> Executor<'a, DB> {
+        Executor::Pool(self)
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl<'a> IntoExecutor<'a> for &'a mut sqlx::SqliteConnection {
+    type DB = sqlx::Sqlite;
+    fn into_executor(self) -> Executor<'a, Self::DB> {
+        Executor::Conn(self)
+    }
+}
+
+#[cfg(feature = "postgres")]
+impl<'a> IntoExecutor<'a> for &'a mut sqlx::postgres::PgConnection {
+    type DB = sqlx::Postgres;
+    fn into_executor(self) -> Executor<'a, Self::DB> {
+        Executor::Conn(self)
+    }
+}
+
+impl<'a, DB: SqlDialect> IntoExecutor<'a> for Executor<'a, DB> {
+    type DB = DB;
+    fn into_executor(self) -> Executor<'a, DB> {
+        self
+    }
+}
+
+impl<'a, DB: Database> Executor<'a, DB> {
+    pub async fn execute<'q, A>(
+        &mut self,
+        query: sqlx::query::Query<'q, DB, A>,
+    ) -> Result<DB::QueryResult, sqlx::Error>
+    where
+        A: sqlx::IntoArguments<'q, DB> + 'q,
+        DB: SqlDialect,
+        for<'c> &'c mut DB::Connection: sqlx::Executor<'c, Database = DB>,
+    {
+        match self {
+            Self::Pool(pool) => query.execute(*pool).await,
+            Self::Conn(conn) => query.execute(&mut **conn).await,
+        }
+    }
+
+    pub async fn fetch_all<'q, T, A>(
+        &mut self,
+        query: sqlx::query::QueryAs<'q, DB, T, A>,
+    ) -> Result<Vec<T>, sqlx::Error>
+    where
+        T: for<'r> sqlx::FromRow<'r, DB::Row> + Send + Unpin,
+        A: sqlx::IntoArguments<'q, DB> + 'q,
+        DB: SqlDialect,
+        for<'c> &'c mut DB::Connection: sqlx::Executor<'c, Database = DB>,
+    {
+        match self {
+            Self::Pool(pool) => query.fetch_all(*pool).await,
+            Self::Conn(conn) => query.fetch_all(&mut **conn).await,
+        }
+    }
+
+    pub async fn fetch_optional<'q, T, A>(
+        &mut self,
+        query: sqlx::query::QueryAs<'q, DB, T, A>,
+    ) -> Result<Option<T>, sqlx::Error>
+    where
+        T: for<'r> sqlx::FromRow<'r, DB::Row> + Send + Unpin,
+        A: sqlx::IntoArguments<'q, DB> + 'q,
+        DB: SqlDialect,
+        for<'c> &'c mut DB::Connection: sqlx::Executor<'c, Database = DB>,
+    {
+        match self {
+            Self::Pool(pool) => query.fetch_optional(*pool).await,
+            Self::Conn(conn) => query.fetch_optional(&mut **conn).await,
+        }
+    }
+}
+
 // Chapter 8: Weak Hook Pattern
+#[async_trait::async_trait]
 pub trait ModelHooks {
-    #[allow(async_fn_in_trait)]
     async fn before_save(&mut self) -> Result<(), sqlx::Error> {
         Ok(())
     }
-    #[allow(async_fn_in_trait)]
     async fn after_save(&mut self) -> Result<(), sqlx::Error> {
         Ok(())
     }
 }
 
-impl<T> ModelHooks for T {}
+#[async_trait::async_trait]
+impl<T: Send + Sync> ModelHooks for T {}
 
 // Chapter 9: Optimistic Locking
 #[derive(Debug, PartialEq)]
@@ -112,7 +222,7 @@ pub trait ModelValidation {
 
 impl<T> ModelValidation for T {}
 
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait Model<DB: Database>: Sized + Send + Sync + Unpin
 where
     DB: SqlDialect,
@@ -123,47 +233,40 @@ where
     fn list_columns() -> Vec<String>;
 
     /// Saves the current instance to the database.
-    ///
-    /// If the record is new (no primary key), it performs an `INSERT`.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// let mut user = User { id: 1, name: "Alice".into() };
-    /// user.save(&pool).await?;
-    /// ```
-    async fn save<'e, E>(&mut self, executor: E) -> Result<(), sqlx::Error>
+    async fn save<'a, E>(&mut self, executor: E) -> Result<(), sqlx::Error>
     where
-        E: SqlxExecutor<'e, Database = DB>;
+        E: IntoExecutor<'a, DB = DB>;
 
-    async fn update(&mut self, executor: Executor<'_, DB>) -> Result<UpdateResult, sqlx::Error>;
+    async fn update<'a, E>(&mut self, executor: E) -> Result<UpdateResult, sqlx::Error>
+    where
+        E: IntoExecutor<'a, DB = DB>;
 
     // Chapter 16: Soft Delete support
-    async fn delete(&mut self, executor: Executor<'_, DB>) -> Result<(), sqlx::Error>;
+    async fn delete<'a, E>(&mut self, executor: E) -> Result<(), sqlx::Error>
+    where
+        E: IntoExecutor<'a, DB = DB>;
     fn has_soft_delete() -> bool;
 
     /// Finds a record by its Primary Key.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// let user = User::find_by_id(&pool, 1).await?;
-    /// ```
-    async fn find_by_id<'e, E>(executor: E, id: i32) -> Result<Option<Self>, sqlx::Error>
+    async fn find_by_id<'a, E>(executor: E, id: i32) -> Result<Option<Self>, sqlx::Error>
     where
-        E: SqlxExecutor<'e, Database = DB>;
+        E: IntoExecutor<'a, DB = DB>;
 
-    async fn eager_load<'e, E>(
+    async fn eager_load<'a, E>(
         _models: &mut [Self],
         _relation: &str,
         _executor: E,
     ) -> Result<(), sqlx::Error>
     where
-        E: SqlxExecutor<'e, Database = DB>,
+        E: IntoExecutor<'a, DB = DB>,
     {
         Ok(())
     }
-
-    fn find(executor: Executor<'_, DB>) -> QueryBuilder<'_, Self, DB> {
-        QueryBuilder::new(executor)
+    fn find<'a, E>(executor: E) -> QueryBuilder<'a, Self, DB>
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        QueryBuilder::new(executor.into_executor())
     }
 
     // Convenience helpers
@@ -252,6 +355,8 @@ where
     for<'q> <DB as Database>::Arguments<'q>: IntoArguments<'q, DB>,
     for<'c> &'c mut <DB as Database>::Connection: SqlxExecutor<'c, Database = DB>,
     for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
+    DB::Connection: Send,
+    T: Send,
 {
     pub async fn all(mut self) -> Result<Vec<T>, sqlx::Error> {
         let mut sql = format!(
@@ -276,10 +381,10 @@ where
         for relation in self.includes {
             match &mut self.executor {
                 Executor::Pool(pool) => {
-                    T::eager_load(&mut results, &relation, *pool).await?;
+                    T::eager_load(&mut results, &relation, Executor::Pool(*pool)).await?;
                 }
                 Executor::Conn(conn) => {
-                    T::eager_load(&mut results, &relation, &mut **conn).await?;
+                    T::eager_load(&mut results, &relation, Executor::Conn(&mut **conn)).await?;
                 }
             }
         }

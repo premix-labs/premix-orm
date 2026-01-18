@@ -1,9 +1,10 @@
 [package]
 name = "premix-core"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "A Zero-Overhead, Type-Safe ORM for Rust that runs optimized SQL."
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/premix-labs/premix-orm"
 keywords = ["orm", "database", "sql", "async", "performance"]
 categories = ["database", "asynchronous"]

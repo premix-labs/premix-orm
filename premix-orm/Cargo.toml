@@ -1,0 +1,14 @@
+[package]
+name = "premix-orm"
+version = "1.0.0"
+edition = "2021"
+description = "The comprehensive ORM library for Rust. This is a facade crate for premix-core and premix-macros."
+license = "MIT"
+repository = "https://github.com/premix-labs/premix-orm"
+readme = "README.md"
+keywords = ["orm", "database", "sql"]
+categories = ["database"]
+
+[dependencies]
+premix-core = { version = "1.0.1", path = "../premix-core" }
+premix-macros = { version = "1.0.1", path = "../premix-macros" }
