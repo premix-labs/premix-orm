@@ -10,7 +10,7 @@
 [![crates.io](https://img.shields.io/crates/v/premix-orm.svg)](https://crates.io/crates/premix-orm)
 [![docs.rs](https://img.shields.io/badge/docs.rs-premix--orm-blue)](https://docs.rs/premix-orm)
 
-![Premix ORM Logo](assets/premix-orm-logo.svg)
+<!-- ![Premix ORM Logo](assets/premix-orm-logo.svg) -->
 
 Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need for manual migration files. It combines the ease of use of Active Record with the raw performance of handcrafted SQL.
 
