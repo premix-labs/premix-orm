@@ -2,7 +2,11 @@
 
 The official command-line tool for **Premix ORM**.
 
-`premix-cli` provides essential utilities for managing your database schema, creating migrations, and synchronizing your Rust models with the database.
+`premix-cli` provides utilities for managing migrations and basic project setup.
+
+## Research Status
+
+This crate is part of a research prototype. APIs may change and production use is not recommended yet.
 
 ## Installation
 
@@ -10,16 +14,22 @@ The official command-line tool for **Premix ORM**.
 cargo install premix-cli
 ```
 
+## Features
+
+- Project initialization (placeholder scaffold)
+- SQL-based migrations (create, up, down)
+- Experimental schema sync command
+
 ## Usage
 
-### 1. Initialize a Project
+### Initialize a Project
 Currently a placeholder for future scaffolding.
 
 ```bash
 premix init
 ```
 
-### 2. Manage Migrations
+### Manage Migrations
 
 Premix ORM supports SQL-based migrations. You can create, run, and revert them using the CLI.
 
@@ -49,13 +59,18 @@ Reverts the last applied migration.
 premix migrate down
 ```
 
-### 3. Sync Schema (Experimental)
+### Sync Schema (Experimental)
 Synchronize your Rust `#[derive(Model)]` structs with the database schema implicitly.
 
 ```bash
 premix sync
 ```
 *Note: For robustness, we recommend using `Premix::sync(&pool)` in your application code on startup.*
+
+## Compatibility
+
+- `migrate up` currently supports SQLite only (MVP)
+- Postgres/MySQL support planned via `sqlx`
 
 ## Configuration
 

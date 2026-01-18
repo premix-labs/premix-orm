@@ -2,26 +2,53 @@
 
 The foundational library for **Premix ORM**.
 
-`premix-core` provides the essential traits, types, and logic that power the ORM functionality. It handles:
+`premix-core` provides the essential traits, types, and logic that power the ORM functionality. It includes:
 - Database abstraction traits (`SqlDialect`)
 - Executor logic (`IntoExecutor`, `Executor`)
 - Model traits (`Model`)
 - SQLx integration helpers
 
-## Usage
+## Research Status
 
-This crate is typically used internally by `premix-orm` or the generated code from `premix-macros`. You generally don't need to depend on it directly unless you are writing custom extensions or low-level database tools.
+This crate is part of a research prototype. APIs may change and production use is not recommended yet.
+
+## Installation
+
+Most users should depend on `premix-orm` instead. Use `premix-core` directly only if you are building extensions or low-level tooling.
 
 ```toml
 [dependencies]
-premix-core = "1.0.1"
+premix-core = "1.0.4"
+```
+
+## Quick Start
+
+```rust
+use premix_core::{Model, Premix};
+use sqlx::SqlitePool;
+
+#[derive(Model, Debug)]
+struct User {
+    id: i32,
+    name: String,
+}
+
+async fn example() -> Result<(), sqlx::Error> {
+    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    Premix::sync::<sqlx::Sqlite, User>(&pool).await?;
+    Ok(())
+}
 ```
 
 ## Features
 
 - **sqlite** (default): Support for SQLite
 - **postgres**: Support for PostgreSQL
-- **mysql**: Support for MySQL (Partial)
+- **mysql**: Support for MySQL (partial)
+
+## Compatibility
+
+`premix-core` uses `sqlx` under the hood. Make sure your `sqlx` features match the database feature you enable here.
 
 ## License
 

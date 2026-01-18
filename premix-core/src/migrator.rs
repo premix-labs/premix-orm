@@ -141,6 +141,23 @@ impl Migrator<sqlx::Postgres> {
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
+    #[cfg(feature = "postgres")]
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(feature = "postgres")]
+    async fn pg_pool_or_skip() -> Option<sqlx::Pool<sqlx::Postgres>> {
+        let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:admin123@localhost:5432/premix_bench".to_string()
+        });
+        match sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&db_url)
+            .await
+        {
+            Ok(pool) => Some(pool),
+            Err(_) => None,
+        }
+    }
 
     #[tokio::test]
     async fn sqlite_migrator_applies_pending_once() {
@@ -172,5 +189,165 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count_after, 1);
+    }
+
+    #[tokio::test]
+    async fn sqlite_migrator_applies_multiple() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        let migrator = Migrator::new(pool.clone());
+
+        let migrations = vec![
+            Migration {
+                version: "20260103000000".to_string(),
+                name: "create_a".to_string(),
+                up_sql: "CREATE TABLE a (id INTEGER PRIMARY KEY);".to_string(),
+                down_sql: "DROP TABLE a;".to_string(),
+            },
+            Migration {
+                version: "20260104000000".to_string(),
+                name: "create_b".to_string(),
+                up_sql: "CREATE TABLE b (id INTEGER PRIMARY KEY);".to_string(),
+                down_sql: "DROP TABLE b;".to_string(),
+            },
+        ];
+
+        migrator.run(migrations).await.unwrap();
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn sqlite_migrator_rolls_back_on_error() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        let migrator = Migrator::new(pool.clone());
+
+        let migrations = vec![Migration {
+            version: "20260102000000".to_string(),
+            name: "bad_sql".to_string(),
+            up_sql: "CREATE TABLE broken (id INTEGER PRIMARY KEY); INVALID SQL".to_string(),
+            down_sql: "DROP TABLE broken;".to_string(),
+        }];
+
+        let err = migrator.run(migrations).await.unwrap_err();
+        assert!(err.to_string().contains("syntax"));
+
+        let table: Option<String> = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='_premix_migrations'",
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert!(table.is_none());
+    }
+
+    #[cfg(feature = "postgres")]
+    #[tokio::test]
+    async fn postgres_migrator_applies_pending_once() {
+        let Some(pool) = pg_pool_or_skip().await else {
+            return;
+        };
+        let migrator = Migrator::new(pool.clone());
+
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let version = format!("20260101{:020}", suffix);
+        let table_name = format!("premix_mig_test_{}", suffix);
+        let migrations = vec![Migration {
+            version: version.clone(),
+            name: "create_test_table".to_string(),
+            up_sql: format!("CREATE TABLE {} (id SERIAL PRIMARY KEY);", table_name),
+            down_sql: format!("DROP TABLE {};", table_name),
+        }];
+
+        migrator.run(migrations.clone()).await.unwrap();
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM _premix_migrations WHERE version = $1",
+        )
+        .bind(&version)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(count, 1);
+
+        migrator.run(migrations).await.unwrap();
+        let count_after: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM _premix_migrations WHERE version = $1",
+        )
+        .bind(&version)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(count_after, 1);
+
+        let _ = sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_name))
+            .execute(&pool)
+            .await;
+        let _ = sqlx::query("DELETE FROM _premix_migrations WHERE version = $1")
+            .bind(&version)
+            .execute(&pool)
+            .await;
+    }
+
+    #[cfg(feature = "postgres")]
+    #[tokio::test]
+    async fn postgres_migrator_rolls_back_on_error() {
+        let Some(pool) = pg_pool_or_skip().await else {
+            return;
+        };
+        let migrator = Migrator::new(pool.clone());
+
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let version = format!("20260102{:020}", suffix);
+        let table_name = format!("premix_mig_bad_{}", suffix);
+        let migrations = vec![Migration {
+            version: version.clone(),
+            name: "bad_sql".to_string(),
+            up_sql: format!(
+                "CREATE TABLE {} (id SERIAL PRIMARY KEY); INVALID SQL",
+                table_name
+            ),
+            down_sql: format!("DROP TABLE {};", table_name),
+        }];
+
+        let err = migrator.run(migrations).await.unwrap_err();
+        assert!(err.to_string().contains("syntax"));
+
+        let table_exists: Option<String> =
+            sqlx::query_scalar("SELECT to_regclass('_premix_migrations')::text")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        if table_exists.is_some() {
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM _premix_migrations WHERE version = $1",
+            )
+            .bind(&version)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(count, 0);
+        }
+
+        let _ = sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_name))
+            .execute(&pool)
+            .await;
     }
 }

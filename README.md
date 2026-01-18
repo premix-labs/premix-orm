@@ -5,8 +5,36 @@
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
+[![crates.io](https://img.shields.io/crates/v/premix-orm.svg)](https://crates.io/crates/premix-orm)
+[![docs.rs](https://img.shields.io/badge/docs.rs-premix--orm-blue)](https://docs.rs/premix-orm)
 
 Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need for manual migration files. It combines the ease of use of Active Record with the raw performance of handcrafted SQL.
+
+> Research status: This project is a research prototype. APIs may change and production use is not recommended yet. See [DISCLAIMER.md](DISCLAIMER.md).
+
+## Why People Try Premix
+
+- **Fast like raw `sqlx`**: generated SQL with a minimal runtime layer.
+- **Low ceremony**: `save`, `find`, `include` with a simple model.
+- **Transparent SQL**: inspect `to_sql()` before running anything.
+
+## Core Philosophy (Short)
+
+- **Zero-Overhead**: treat ORM as a thin layer on top of raw SQL.
+- **Mental Model Match**: code should look like how you think about data.
+- **Impossible-to-Fail**: push more errors to compile time.
+- **Glass Box**: show the SQL you are about to run.
+- **Escape Hatch**: allow raw SQL when needed.
+
+Why this is practical:
+
+- **Zero-Overhead**: benchmarks show Premix close to raw `sqlx` in common CRUD flows (see below).
+- **Mental Model Match**: `user.save()` / `User::find_in_pool()` avoids boilerplate glue.
+- **Impossible-to-Fail**: model fields are validated at compile time; schema mismatches surface early.
+- **Glass Box**: `to_sql()`/`to_update_sql()` let you inspect SQL before running it.
+- **Escape Hatch**: `Model::raw_sql()` gives full control for edge cases.
+
+See `docs/DEVELOPMENT.md` for the engineering flowplan and `docs/PHILOSOPHY_CHECKLIST.md` for status details.
 
 ## Why Premix?
 
@@ -20,6 +48,18 @@ Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need f
 ## Benchmarks (Phase 6 Results)
 
 We don't just say we're fast; we prove it.
+
+TL;DR: Premix is near raw `sqlx` for inserts/selects and dramatically faster
+than loop-based bulk updates in this benchmark suite.
+
+Highlights (from `docs/BENCHMARK_RESULTS.md`):
+
+- Insert (1 row): Premix **15.1 us** vs raw SQLx 22.8 us
+- Select (1 row): Premix **12.3 us** vs raw SQLx 12.2 us (~same)
+- Bulk Update (1,000 rows): Premix **66.5 us** vs loop 32.6 ms (~490x faster)
+- Postgres SELECT: Premix **61.5 us** vs raw SQL 65.2 us (faster)
+
+Full results: `docs/BENCHMARK_RESULTS.md`
 
 | Operation | Premix | SeaORM | Rbatis | SQLx (Raw) | Verdict |
 |-----------|--------|--------|--------|------------|---------|
@@ -110,10 +150,38 @@ let users = User::find_in_pool(&pool)
 
 ---
 
+## 5-Minute Demo
+
+```bash
+cargo new premix-demo
+cd premix-demo
+```
+
+```toml
+[dependencies]
+premix-orm = "1.0.4"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+```
+
+Use the code from Quick Start and run:
+
+```bash
+cargo run
+```
+
+Prefer a template? Start from `examples/basic-app` and modify as needed.
+
+---
+
 ## Documentation
 
 For a longer-form guide, see `orm-book/` in this repository. It covers models,
 queries, relations, migrations, transactions, and limitations.
+
+Release notes live in `CHANGELOG.md`, and the development roadmap is in
+`docs/DEVELOPMENT.md`.
 
 ## Advanced Features
 
@@ -180,11 +248,26 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = "1.0.3"
+premix-orm = "1.0.4"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 ```
+
+## Common Pitfalls
+
+- **Feature flags**: enable database features on both `premix-orm` and `sqlx`.
+- **`DATABASE_URL`**: CLI uses it by default; pass `--database` if needed.
+- **`migrate down`**: not implemented yet (use SQL down scripts manually).
+
+## Compatibility
+
+- Uses the Tokio runtime (async/await).
+- `sqlx` features must match your target database.
+
+## Example App
+
+Try `examples/basic-app` for a minimal runnable setup.
 
 ## Contributing
 

@@ -30,6 +30,8 @@ Apply migrations:
 premix migrate up
 ```
 
+Note: `premix migrate down` is not implemented yet.
+
 By default, the CLI reads `DATABASE_URL` or falls back to `sqlite:premix.db`.
 You can pass a database directly:
 

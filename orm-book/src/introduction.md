@@ -1,8 +1,10 @@
 # Introduction
 
-Premix ORM is a zero-overhead, type-safe ORM for Rust. It generates SQL at
-compile time via procedural macros, while keeping the runtime path as close
-as possible to raw `sqlx` calls.
+Premix ORM is a zero-overhead, type-safe ORM for Rust. Its macros generate
+query-building code at compile time, and the SQL strings are assembled at
+runtime as close to raw `sqlx` calls as possible.
+
+> Research status: This project is a research prototype. APIs may change and production use is not recommended yet.
 
 This book focuses on:
 

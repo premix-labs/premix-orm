@@ -2,21 +2,26 @@
 
 Procedural macros for **Premix ORM**.
 
-This crate provides the `#[derive(Model)]` macro, which automatically implements the CRUD logic and database mapping for your Rust structs.
+This crate provides the `#[derive(Model)]` macro, which automatically implements CRUD logic and database mapping for your Rust structs.
 
-## Usage
+## Research Status
 
-Add this to your `Cargo.toml` (usually via `premix-orm` or `premix-macros` directly if needed):
+This crate is part of a research prototype. APIs may change and production use is not recommended yet.
+
+## Installation
+
+Most users should add `premix-orm` instead. Use `premix-macros` directly only if needed.
 
 ```toml
 [dependencies]
-premix-macros = "1.0.1"
+premix-macros = "1.0.4"
 ```
 
-## Example
+## Quick Start
 
 ```rust
 use premix_macros::Model;
+use serde::{Deserialize, Serialize};
 
 #[derive(Model, Debug, Serialize, Deserialize)]
 pub struct User {

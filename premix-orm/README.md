@@ -4,13 +4,15 @@ Premix ORM is a zero-overhead, type-safe ORM for Rust, designed for performance 
 
 This crate (`premix-orm`) is the official facade that re-exports `premix-core` and `premix-macros`, providing a unified entry point for your application.
 
+## Research Status
+
+This crate is part of a research prototype. APIs may change and production use is not recommended yet.
+
 ## Why use this facade?
 
-Previously, users had to manage both `premix-core` and `premix-macros`. With `premix-orm`, you get:
-
-1. Unified imports: `use premix_orm::prelude::*;` gets you everything.
-2. No version mismatch: core and macros versions stay compatible.
-3. Clean dependencies: only one crate to add to your `Cargo.toml`.
+- Unified imports: `use premix_orm::prelude::*;` gets you everything.
+- No version mismatch: core and macros versions stay compatible.
+- Clean dependencies: only one crate to add to your `Cargo.toml`.
 
 ## Installation
 
@@ -18,7 +20,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = "1.0.3"
+premix-orm = "1.0.4"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -29,7 +31,7 @@ serde = { version = "1", features = ["derive"] }
 Enable database features on both `premix-orm` and `sqlx`:
 
 ```toml
-premix-orm = { version = "1.0.3", features = ["postgres"] }
+premix-orm = { version = "1.0.4", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
@@ -63,6 +65,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## Features
+
+- Compile-time SQL generation via macros
+- Application-level eager loading using batched queries
+- Optional soft delete support by `deleted_at` convention
+- SQLite, Postgres, and MySQL via `sqlx` feature flags
+
+## Compatibility
+
+- Requires `sqlx` with matching database features
+- Works with the Tokio runtime
 
 ## Book
 

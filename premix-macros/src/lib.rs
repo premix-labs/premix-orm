@@ -7,18 +7,16 @@ mod relations;
 #[proc_macro_derive(Model, attributes(has_many, belongs_to, premix))]
 pub fn derive_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    match derive_model_impl(&input) {
+        Ok(tokens) => TokenStream::from(tokens),
+        Err(err) => TokenStream::from(err.to_compile_error()),
+    }
+}
 
-    let impl_block = match generate_generic_impl(&input) {
-        Ok(tokens) => tokens,
-        Err(err) => return TokenStream::from(err.to_compile_error()),
-    };
-
-    let rel_block = match relations::impl_relations(&input) {
-        Ok(tokens) => tokens,
-        Err(err) => return TokenStream::from(err.to_compile_error()),
-    };
-
-    TokenStream::from(quote! {
+fn derive_model_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let impl_block = generate_generic_impl(input)?;
+    let rel_block = relations::impl_relations(input)?;
+    Ok(quote! {
         #impl_block
         #rel_block
     })
@@ -108,6 +106,103 @@ mod tests {
             name: String
         };
         assert!(!is_ignored(&field));
+    }
+
+    #[test]
+    fn is_ignored_false_for_premix_other_arg() {
+        let field: Field = parse_quote! {
+            #[premix(skip)]
+            name: String
+        };
+        assert!(!is_ignored(&field));
+    }
+
+    #[test]
+    fn is_ignored_false_when_premix_has_no_args() {
+        let field: Field = parse_quote! {
+            #[premix]
+            name: String
+        };
+        assert!(!is_ignored(&field));
+    }
+
+    #[test]
+    fn derive_model_impl_emits_tokens() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = derive_model_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("impl"));
+    }
+
+    #[test]
+    fn derive_model_impl_propagates_error() {
+        let input: DeriveInput = parse_quote! {
+            enum User {
+                A,
+            }
+        };
+        let err = derive_model_impl(&input).unwrap_err();
+        assert!(err.to_string().contains("only supports structs"));
+    }
+
+
+    #[test]
+    fn generate_generic_impl_includes_soft_delete_delete_impl() {
+        let input: DeriveInput = parse_quote! {
+            struct AuditLog {
+                id: i32,
+                deleted_at: Option<String>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("deleted_at ="));
+        assert!(tokens.contains("has_soft_delete"));
+    }
+
+    #[test]
+    fn generate_generic_impl_ignores_marked_fields() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+                #[premix(ignore)]
+                temp: Option<String>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("temp : None"));
+        assert!(!tokens.contains("\"temp\""));
+    }
+
+    #[test]
+    fn generate_generic_impl_adds_relation_bounds() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[has_many(Post)]
+                posts: Vec<Post>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("Post : premix_core :: Model < DB >"));
+    }
+
+    #[test]
+    fn generate_generic_impl_records_field_names() {
+        let input: DeriveInput = parse_quote! {
+            struct Account {
+                id: i32,
+                user_id: i32,
+                is_active: bool,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("\"user_id\""));
+        assert!(tokens.contains("\"is_active\""));
     }
 
 }

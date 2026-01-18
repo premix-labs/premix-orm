@@ -3,6 +3,7 @@
 ## Project Concept
 **Concept:** The "Holy Grail" of Rust ORMs.
 **Slogan:** "Write Rust, run optimized SQL."
+**Status:** Research prototype; production use is not recommended yet.
 
 ## 1. Core Philosophy (5 Pillars of a Great ORM)
 

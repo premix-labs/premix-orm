@@ -167,4 +167,15 @@ mod tests {
         assert!(tokens.contains("WHERE"));
         assert!(tokens.contains("IN"));
     }
+
+    #[test]
+    fn impl_relations_returns_empty_when_no_attrs() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+            }
+        };
+        let tokens = impl_relations(&input).unwrap().to_string();
+        assert!(tokens.is_empty());
+    }
 }

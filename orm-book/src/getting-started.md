@@ -4,14 +4,19 @@
 
 ```toml
 [dependencies]
-premix-orm = "1.0.3"
+premix-orm = "1.0.4"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 ```
 
-Enable `postgres` or `mysql` features on `sqlx` if you plan to use those
-databases.
+Enable `postgres` or `mysql` features on both `premix-orm` and `sqlx` if you
+plan to use those databases.
+
+```toml
+premix-orm = { version = "1.0.4", features = ["postgres"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
+```
 
 ## 2. Define a Model
 
@@ -42,3 +47,9 @@ user.save(&pool).await?;
 
 Premix creates the table if it does not exist and keeps the SQL simple and
 predictable.
+
+## Common Pitfalls
+
+- Enable database features on both `premix-orm` and `sqlx`.
+- The CLI uses `DATABASE_URL` by default; pass `--database` if needed.
+- `premix migrate down` is not implemented yet.

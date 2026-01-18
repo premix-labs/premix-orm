@@ -7,6 +7,7 @@ Premix exposes two traits for application-level logic:
 Implement `ModelHooks` to run code before or after saving:
 
 ```rust
+use premix_orm::prelude::*;
 use premix_orm::ModelHooks;
 
 #[derive(Model)]

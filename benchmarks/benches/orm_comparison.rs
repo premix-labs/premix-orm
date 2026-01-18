@@ -941,6 +941,7 @@ fn benchmark_bulk_ops(c: &mut Criterion) {
     group.bench_function("bulk_update_1000", |b| {
         b.to_async(&rt).iter(|| async {
             <UserPremix as PremixModel<sqlx::Sqlite>>::find_in_pool(&pool)
+                .filter("id IS NOT NULL")
                 .update(serde_json::json!({ "name": "Updated Bulk" }))
                 .await
                 .unwrap();

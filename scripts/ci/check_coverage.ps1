@@ -1,3 +1,6 @@
+param(
+    [string]$Features = ""
+)
 $ErrorActionPreference = "Stop"
 $sw = [Diagnostics.Stopwatch]::StartNew()
 
@@ -34,7 +37,11 @@ try {
 
     Write-Step "Running Tarpaulin..."
     # Note: Doctests are currently disabled due to a known rustdoc issue on Windows with Tarpaulin.
-    cargo tarpaulin --out Html --output-dir coverage --all-targets --exclude-files benchmarks/* --exclude-files examples/*
+    $FeatureArgs = @()
+    if ($Features) {
+        $FeatureArgs = @("--features", $Features)
+    }
+    cargo tarpaulin --out Html --output-dir coverage --all-targets --exclude-files benchmarks/* --exclude-files examples/* --exclude-files premix-macros/src/lib.rs @FeatureArgs
 
     $sw.Stop()
     Write-Header "COVERAGE REPORT GENERATED in $($sw.Elapsed.TotalSeconds.ToString("N2"))s"
