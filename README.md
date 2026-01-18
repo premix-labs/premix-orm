@@ -161,8 +161,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-core = "1.0.0"
-premix-macros = "1.0.0"
+premix-orm = "1.0.0"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
