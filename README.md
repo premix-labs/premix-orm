@@ -48,7 +48,7 @@ Premix now supports traditional versioned migrations for production environments
 
 ### 1. Create a Migration
 ```bash
-cargo run -p premix-cli -- migrate create add_users
+premix migrate create add_users
 # Created: migrations/20260118000000_add_users.sql
 ```
 
@@ -64,7 +64,7 @@ DROP TABLE users;
 
 ### 3. Run Migrations
 ```bash
-cargo run -p premix-cli -- migrate up
+premix migrate up
 # 🚚 Applying migration: 20260118000000_add_users
 # ✅ Migrations up to date.
 ```
@@ -75,8 +75,8 @@ cargo run -p premix-cli -- migrate up
 
 ### 1. Define Your Model
 ```rust
-use premix_macros::Model;
-use premix_core::{Model, Premix};
+use premix_orm::Model;
+// No need to import premix_core or premix_macros separately!
 
 #[derive(Model)]
 struct User {
