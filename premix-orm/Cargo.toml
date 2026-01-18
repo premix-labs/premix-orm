@@ -1,7 +1,7 @@
 [package]
 name = "premix-orm"
-version = "1.0.0"
-edition = "2021"
+version = "1.0.1"
+edition = "2024"
 description = "The comprehensive ORM library for Rust. This is a facade crate for premix-core and premix-macros."
 license = "MIT"
 repository = "https://github.com/premix-labs/premix-orm"
@@ -12,3 +12,9 @@ categories = ["database"]
 [dependencies]
 premix-core = { version = "1.0.1", path = "../premix-core" }
 premix-macros = { version = "1.0.1", path = "../premix-macros" }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+tokio = { version = "1", features = ["full"] }
+chrono = { version = "0.4", features = ["serde"] }

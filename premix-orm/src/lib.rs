@@ -27,7 +27,7 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Connect and Sync
 //! let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
-//! premix_orm::Premix::sync::<User, _>(&pool).await?;
+//! premix_orm::Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 //!
 //! // Create
 //! let mut user = User { id: 0, name: "Alice".to_string() };
@@ -45,3 +45,9 @@
 
 pub use premix_core::*;
 pub use premix_macros::Model;
+
+pub mod prelude {
+    pub use premix_core::prelude::*;
+
+    pub use crate::Model; // The macro // The traits and other core items
+}

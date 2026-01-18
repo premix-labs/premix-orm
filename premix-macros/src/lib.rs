@@ -94,7 +94,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 if <DB as premix_core::SqlDialect>::rows_affected(&result) == 0 {
                     let exists_p = <DB as premix_core::SqlDialect>::placeholder(1);
                     let exists_sql = format!("SELECT id FROM {} WHERE id = {}", table_name, exists_p);
-                    let exists_query = premix_core::sqlx::query_as::<DB, Self>(&exists_sql).bind(&self.id);
+                    let exists_query = premix_core::sqlx::query_as::<DB, (i32,)>(&exists_sql).bind(&self.id);
                     let exists = executor.fetch_optional(exists_query).await?;
 
                     if exists.is_none() {
@@ -214,6 +214,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         where
             DB: premix_core::SqlDialect,
             for<'c> &'c str: premix_core::sqlx::ColumnIndex<DB::Row>,
+            usize: premix_core::sqlx::ColumnIndex<DB::Row>,
             for<'q> <DB as premix_core::sqlx::Database>::Arguments<'q>: premix_core::sqlx::IntoArguments<'q, DB>,
             for<'c> &'c mut <DB as premix_core::sqlx::Database>::Connection: premix_core::sqlx::Executor<'c, Database = DB>,
             i32: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB> + for<'r> premix_core::sqlx::Decode<'r, DB>,

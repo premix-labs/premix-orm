@@ -1,7 +1,7 @@
+param([switch]$Fix)
+
 $ErrorActionPreference = "Stop"
 $sw = [Diagnostics.Stopwatch]::StartNew()
-
-param([switch]$Fix)
 
 function Write-Header {
     param($Text)

@@ -104,9 +104,9 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                 let sql = format!("SELECT * FROM {} WHERE {} IN ({})", #child_table, #parent_fk_str, params);
                                 let mut query = premix_core::sqlx::query_as::<DB, #child_model>(&sql);
                                 for id in ids { query = query.bind(id); }
-                                
+
                                 let children = executor.fetch_all(query).await?;
-                                
+
                                 let mut grouped: std::collections::HashMap<i32, Vec<#child_model>> = std::collections::HashMap::new();
                                 for child in children {
                                     grouped.entry(child.#parent_fk_ident).or_default().push(child);
