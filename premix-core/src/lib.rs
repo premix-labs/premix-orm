@@ -259,6 +259,13 @@ where
     where
         E: IntoExecutor<'a, DB = DB>;
 
+    /// Use raw SQL and map rows into the current model type.
+    fn raw_sql<'q>(
+        sql: &'q str,
+    ) -> sqlx::query::QueryAs<'q, DB, Self, <DB as Database>::Arguments<'q>> {
+        sqlx::query_as::<DB, Self>(sql)
+    }
+
     async fn eager_load<'a, E>(
         _models: &mut [Self],
         _relation: &str,
@@ -337,6 +344,68 @@ where
     pub fn with_deleted(mut self) -> Self {
         self.include_deleted = true;
         self
+    }
+
+    /// Returns the SELECT SQL that would be executed for this query.
+    pub fn to_sql(&self) -> String {
+        let mut sql = format!(
+            "SELECT * FROM {}{}",
+            T::table_name(),
+            self.build_where_clause()
+        );
+
+        if let Some(limit) = self.limit {
+            sql.push_str(&format!(" LIMIT {}", limit));
+        }
+
+        if let Some(offset) = self.offset {
+            sql.push_str(&format!(" OFFSET {}", offset));
+        }
+
+        sql
+    }
+
+    /// Returns the UPDATE SQL that would be executed for this query.
+    pub fn to_update_sql(&self, values: &serde_json::Value) -> Result<String, sqlx::Error> {
+        let obj = values.as_object().ok_or_else(|| {
+            sqlx::Error::Protocol("Bulk update requires a JSON object".to_string())
+        })?;
+
+        let mut i = 1;
+        let set_clause = obj
+            .keys()
+            .map(|k| {
+                let p = DB::placeholder(i);
+                i += 1;
+                format!("{} = {}", k, p)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Ok(format!(
+            "UPDATE {} SET {}{}",
+            T::table_name(),
+            set_clause,
+            self.build_where_clause()
+        ))
+    }
+
+    /// Returns the DELETE (or soft delete) SQL that would be executed for this query.
+    pub fn to_delete_sql(&self) -> String {
+        if T::has_soft_delete() {
+            format!(
+                "UPDATE {} SET deleted_at = {}{}",
+                T::table_name(),
+                DB::current_timestamp_fn(),
+                self.build_where_clause()
+            )
+        } else {
+            format!(
+                "DELETE FROM {}{}",
+                T::table_name(),
+                self.build_where_clause()
+            )
+        }
     }
 
     fn build_where_clause(&self) -> String {

@@ -4,7 +4,7 @@
 
 ```toml
 [dependencies]
-premix-orm = "1.0.2"
+premix-orm = "1.0.3"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

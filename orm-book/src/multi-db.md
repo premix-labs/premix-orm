@@ -9,7 +9,7 @@ Premix supports SQLite, Postgres, and MySQL through `sqlx`.
 Example `Cargo.toml`:
 
 ```toml
-premix-orm = { version = "1.0.2", features = ["postgres"] }
+premix-orm = { version = "1.0.3", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 

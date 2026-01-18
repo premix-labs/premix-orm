@@ -8,8 +8,9 @@
 
 ### 1. The "Zero-Overhead" Abstraction (Fastest)
 > "Your code should be as fast as handwriting raw SQL."
-- **Premix Approach:** Uses Rust macros to generate SQL at compile time. At runtime it executes pre-prepared SQL.
+- **Premix Approach:** Uses Rust macros to generate SQL builders. SQL strings are assembled at runtime and executed via `sqlx`.
 - **Goal:** Runtime benchmarks should match raw `sqlx` (0% overhead).
+- **Current status:** Performance is close to raw SQL in benchmarks, but SQL strings are still built at runtime.
 
 ### 2. The "Mental Model Match" (Easiest)
 > "Code should look like the way you think, not the way the database stores."
@@ -24,16 +25,21 @@
   - Wrong field name -> compile error.
   - Type mismatch -> compile error.
 - **Goal:** Eliminate runtime surprises.
+- **Current status:** Model fields are validated at compile time, but string-based filters can still fail at runtime.
 
 ### 4. The "Glass Box" Transparency (Transparent)
 > "Magic is good, but Black Magic is bad."
 - **Premix Approach:** Expose generated SQL via `to_sql()` or similar helpers.
 - **Goal:** Developers should feel in control of the SQL.
+- **Current status:** Query builder exposes `to_sql()`, `to_update_sql()`, and `to_delete_sql()`.
 
 ### 5. The "Graceful Escape Hatch" (Flexible)
 > "Easy things should be easy, hard things should be possible."
 - **Premix Approach:** Allow mixing raw SQL with the ORM for complex cases.
 - **Example:** `User::raw_sql("SELECT * FROM ...").fetch_all()`
+- **Current status:** `Model::raw_sql(...)` is available for raw queries mapped to models.
+
+See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 ---
 

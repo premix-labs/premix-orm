@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-01-18
+
+### Added
+- **SQL Transparency:** Added `to_sql()`, `to_update_sql()`, and `to_delete_sql()` on the query builder for inspecting generated SQL.
+- **Raw SQL Escape Hatch:** Added `Model::raw_sql(...)` for mapping raw queries to models.
+- **Docs:** Added `docs/PHILOSOPHY_CHECKLIST.md` and updated Core Philosophy status in `docs/DEVELOPMENT.md`.
+
 ## [1.0.2] - 2026-01-18
 
 ### Fixed 🐛
