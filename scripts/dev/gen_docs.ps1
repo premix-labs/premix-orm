@@ -25,7 +25,16 @@ try {
     Set-Location "$ScriptRoot/../.."
     
     Write-Step "Generating Rust Documentation..."
-    cargo doc --no-deps --open
+    cargo doc --no-deps
+
+    $docPath = Join-Path $ScriptRoot "..\..\target\doc\premix_orm\index.html"
+    if (Test-Path $docPath) {
+        Write-Host "     Opening $docPath"
+        Start-Process $docPath
+    }
+    else {
+        Write-Host "[WARN] premix_orm docs not found at $docPath" -ForegroundColor DarkGray
+    }
 
     if (Get-Command mdbook -ErrorAction SilentlyContinue) {
         Write-Step "Building The Book (mdBook)..."

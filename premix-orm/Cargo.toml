@@ -9,6 +9,12 @@ readme = "README.md"
 keywords = ["orm", "database", "sql"]
 categories = ["database"]
 
+[features]
+default = ["sqlite"]
+sqlite = ["premix-core/sqlite"]
+postgres = ["premix-core/postgres"]
+mysql = ["premix-core/mysql"]
+
 [dependencies]
 premix-core = { version = "1.0.2", path = "../premix-core" }
 premix-macros = { version = "1.0.2", path = "../premix-macros" }
@@ -18,3 +24,7 @@ serde = { version = "1", features = ["derive"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

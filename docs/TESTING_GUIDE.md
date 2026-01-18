@@ -1,8 +1,8 @@
-# 🧪 Premix ORM Testing Guide
+# Premix ORM Testing Guide
 
 Quick reference for running tests, examples, and benchmarks across the workspace.
 
-## 🐚 Helper Scripts (Recommended)
+## Helper Scripts (Recommended)
 
 We provide categorized PowerShell scripts in `scripts/` to standardize testing:
 
@@ -14,15 +14,15 @@ We provide categorized PowerShell scripts in `scripts/` to standardize testing:
 | `./scripts/bench/bench_io.ps1` | Perf (I/O) | Heavy Postgres I/O benchmark. |
 | `./scripts/ci/check_all.ps1` | CI | Full check (Build, Test, Clippy, Format). |
 
-## 1. 🏗️ Core & Basic Verification
+## 1. Core and Basic Verification
 
 | Scenario | Command | Description |
 |----------|---------|-------------|
-| **Core CRUD** | `cargo run -p basic-app` | Creates, Reads, Updates, Deletes users. |
+| **Core CRUD** | `cargo run -p basic-app` | Creates, reads, updates, deletes users. |
 | **Tutorial App** | `cargo run -p premix-axum-tutorial` | E2E test for the official tutorial. |
 | **Simple Axum** | `cargo run -p axum-app` | Basic web server integration. |
 
-## 2. 🚀 Performance & Relations
+## 2. Performance and Relations
 
 | Scenario | Command | Description |
 |----------|---------|-------------|
@@ -30,29 +30,29 @@ We provide categorized PowerShell scripts in `scripts/` to standardize testing:
 | **Eager Loading** | `cargo run -p eager-app` | Batch fetching logic (`.include("posts")`). |
 | **Benchmark (All)** | `cargo bench` | Run all performance benchmarks. |
 
-## 3. 🛡️ Enterprise Features
+## 3. Enterprise Features
 
 | Scenario | Command | Description |
 |----------|---------|-------------|
-| **Transactions** | `cargo run -p transaction-app` | ACID compliance test (Commit/Rollback). |
+| **Transactions** | `cargo run -p transaction-app` | ACID compliance test (commit/rollback). |
 | **Hooks** | `cargo run -p hooks-app` | Verify `before_save` / `after_save` triggers. |
 | **Observability** | `cargo run -p tracing-app` | Check structured logging output. |
 
-## 4. 🔒 Data Integrity & Validation
+## 4. Data Integrity and Validation
 
 | Scenario | Command | Description |
 |----------|---------|-------------|
 | **Optimistic Locking** | `cargo run -p optimistic-locking-app` | Test concurrency checks (version conflict). |
-| **Validation** | `cargo run -p validation-app` | Test `validate()` trait logic. |
+| **Validation** | `cargo run -p validation-app` | Test `validate()` logic. |
 
-## 5. 🗑️ Advanced Data Management
+## 5. Advanced Data Management
 
 | Scenario | Command | Description |
 |----------|---------|-------------|
 | **Soft Deletes** | `cargo run -p soft-delete-app` | Verify `deleted_at` behavior. |
 | **Bulk Ops** | `cargo run -p bulk-ops-app` | Test `update_all` and `delete_all`. |
 
-## 🛠️ Internal Unit Tests
+## Internal Unit Tests
 
 ```bash
 cargo test -p premix-core

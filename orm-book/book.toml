@@ -1,0 +1,9 @@
+[book]
+title = "Premix ORM"
+authors = ["Premix Labs"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "light"

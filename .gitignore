@@ -77,3 +77,4 @@ rustc-ice-*.txt
 # Reports & Docs
 # ===================
 coverage/
+orm-book/book/

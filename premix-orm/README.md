@@ -1,17 +1,18 @@
-# Premix ORM 🚀
+# Premix ORM
 
-**Premix ORM** is a zero-overhead, type-safe ORM for Rust, designed for performance and developer experience.
+Premix ORM is a zero-overhead, type-safe ORM for Rust, designed for performance and developer experience.
 
-This crate (`premix-orm`) is the **official facade** that re-exports `premix-core` and `premix-macros`, providing a unified, unambiguous entry point for your application.
+This crate (`premix-orm`) is the official facade that re-exports `premix-core` and `premix-macros`, providing a unified entry point for your application.
 
-## 🌟 Why use this Facade?
+## Why use this facade?
 
 Previously, users had to manage both `premix-core` and `premix-macros`. With `premix-orm`, you get:
-1.  **Unified Imports**: `use premix_orm::prelude::*;` gets you everything.
-2.  **No Version Mismatch**: We ensure the core and macros versions are always compatible.
-3.  **Clean Dependencies**: Only one crate to add to your `Cargo.toml`.
 
-## 📦 Installation
+1. Unified imports: `use premix_orm::prelude::*;` gets you everything.
+2. No version mismatch: core and macros versions stay compatible.
+3. Clean dependencies: only one crate to add to your `Cargo.toml`.
+
+## Installation
 
 Add this to your `Cargo.toml`:
 
@@ -23,37 +24,50 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 ```
 
-## 🚀 Quick Start
+## Database Features
+
+Enable database features on both `premix-orm` and `sqlx`:
+
+```toml
+premix-orm = { version = "1.0.2", features = ["postgres"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
+```
+
+## Quick Start
 
 ```rust
 use premix_orm::prelude::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Model, Debug, Serialize, Deserialize)]
 pub struct User {
     pub id: i32,
     pub name: String,
-    
-    // Soft Delete is auto-detected by field name
+
+    // Soft delete is auto-detected by field name.
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = SqlitePool::connect("sqlite::memory:").await?;
-    
-    // Sync schema
+
+    // Sync schema.
     Premix::sync::<User, _>(&pool).await?;
-    
-    // CRUD
+
+    // CRUD.
     let mut user = User { id: 0, name: "Alice".to_string(), deleted_at: None };
     user.save(&pool).await?;
-    
+
     println!("Saved user with ID: {}", user.id);
     Ok(())
 }
 ```
 
-## 📄 License
+## Book
 
-This project is licensed under the [MIT license](LICENSE).
+For a longer-form guide, see `orm-book/` in this repository.
+
+## License
+
+This project is licensed under the MIT license.
