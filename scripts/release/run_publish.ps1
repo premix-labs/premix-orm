@@ -44,6 +44,9 @@ try {
     Write-Host "   [premix-macros]..." -ForegroundColor Gray
     cargo publish -p premix-macros --dry-run
 
+    Write-Host "   [premix-orm]..." -ForegroundColor Gray
+    cargo publish -p premix-orm --dry-run
+
     Write-Host "   [premix-cli]..." -ForegroundColor Gray
     cargo publish -p premix-cli --dry-run
     Write-Success "Dry run completed successfully."
@@ -51,7 +54,8 @@ try {
     # 3. Confirmation
     Write-Header "CONFIRM PUBLICATION"
     $version = (Select-String -Pattern 'version = "(.*)"' -Path premix-core/Cargo.toml | Select-Object -First 1 | ForEach-Object { $_.Matches.Groups[1].Value })
-    $confirm = Read-Host "Are you sure you want to publish v$version? (y/N)"
+    $prompt = "Are you sure you want to publish v" + $version + "? (y/N)"
+    $confirm = Read-Host $prompt
     if ($confirm -ne "y") {
         Write-Host "Cancelled." -ForegroundColor Yellow
         exit 0
@@ -70,6 +74,12 @@ try {
     Write-Step "Waiting 30s for Indexing..."
     Start-Sleep -Seconds 30
 
+    Write-Step "Publishing premix-orm..."
+    cargo publish -p premix-orm
+
+    Write-Step "Waiting 30s for Indexing..."
+    Start-Sleep -Seconds 30
+
     Write-Step "Publishing premix-cli..."
     cargo publish -p premix-cli
 
@@ -77,6 +87,7 @@ try {
     Write-Header "PUBLICATION SUCCESSFUL in $($sw.Elapsed.TotalSeconds.ToString("N2"))s"
     Write-Host "   https://crates.io/crates/premix-core"
     Write-Host "   https://crates.io/crates/premix-macros"
+    Write-Host "   https://crates.io/crates/premix-orm"
     Write-Host "   https://crates.io/crates/premix-cli"
 }
 catch {

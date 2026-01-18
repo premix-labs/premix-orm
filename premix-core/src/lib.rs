@@ -77,6 +77,9 @@ impl SqlDialect for sqlx::MySql {
     fn rows_affected(res: &sqlx::mysql::MySqlQueryResult) -> u64 {
         res.rows_affected()
     }
+    fn last_insert_id(res: &sqlx::mysql::MySqlQueryResult) -> i64 {
+        res.last_insert_id() as i64
+    }
 }
 
 // Chapter 7: Stronger Executor Abstraction
