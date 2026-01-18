@@ -55,7 +55,6 @@ impl SqlDialect for sqlx::Sqlite {
 }
 
 #[cfg(feature = "postgres")]
-#[cfg(feature = "postgres")]
 impl SqlDialect for sqlx::Postgres {
     fn placeholder(n: usize) -> String {
         format!("${}", n)
@@ -71,7 +70,6 @@ impl SqlDialect for sqlx::Postgres {
     }
 }
 
-#[cfg(feature = "mysql")]
 #[cfg(feature = "mysql")]
 impl SqlDialect for sqlx::MySql {
     fn placeholder(_n: usize) -> String {
@@ -202,9 +200,13 @@ fn default_model_hook_result() -> Result<(), sqlx::Error> {
 #[async_trait::async_trait]
 pub trait ModelHooks {
     #[inline(never)]
-    async fn before_save(&mut self) -> Result<(), sqlx::Error> { default_model_hook_result() }
+    async fn before_save(&mut self) -> Result<(), sqlx::Error> {
+        default_model_hook_result()
+    }
     #[inline(never)]
-    async fn after_save(&mut self) -> Result<(), sqlx::Error> { default_model_hook_result() }
+    async fn after_save(&mut self) -> Result<(), sqlx::Error> {
+        default_model_hook_result()
+    }
 }
 
 #[async_trait::async_trait]
@@ -279,7 +281,9 @@ where
     ) -> Result<(), sqlx::Error>
     where
         E: IntoExecutor<'a, DB = DB>,
-    { default_model_hook_result() }
+    {
+        default_model_hook_result()
+    }
     fn find<'a, E>(executor: E) -> QueryBuilder<'a, Self, DB>
     where
         E: IntoExecutor<'a, DB = DB>,
@@ -502,7 +506,12 @@ where
             .collect::<Vec<_>>()
             .join(", ");
 
-        let sql = format!("UPDATE {} SET {}{}", T::table_name(), set_clause, self.build_where_clause());
+        let sql = format!(
+            "UPDATE {} SET {}{}",
+            T::table_name(),
+            set_clause,
+            self.build_where_clause()
+        );
 
         let mut query = sqlx::query::<DB>(&sql);
         for val in obj.values() {
@@ -517,7 +526,11 @@ where
                 }
                 serde_json::Value::Bool(b) => query = query.bind(*b),
                 serde_json::Value::Null => query = query.bind(Option::<String>::None),
-                _ => return Err(sqlx::Error::Protocol("Unsupported type in bulk update".to_string())),
+                _ => {
+                    return Err(sqlx::Error::Protocol(
+                        "Unsupported type in bulk update".to_string(),
+                    ));
+                }
             }
         }
 
@@ -584,8 +597,9 @@ impl Premix {
 
 #[cfg(test)]
 mod tests {
+    use sqlx::{Sqlite, SqlitePool, sqlite::SqliteRow};
+
     use super::*;
-    use sqlx::{sqlite::SqliteRow, Sqlite, SqlitePool};
 
     #[derive(Debug)]
     struct SoftDeleteModel {
@@ -664,10 +678,7 @@ mod tests {
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(
-            _executor: E,
-            _id: i32,
-        ) -> Result<Option<Self>, sqlx::Error>
+        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
         where
             E: IntoExecutor<'a, DB = sqlx::Postgres>,
         {
@@ -677,8 +688,9 @@ mod tests {
 
     #[cfg(feature = "postgres")]
     fn pg_url() -> String {
-        std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://postgres:admin123@localhost:5432/premix_bench".to_string())
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:admin123@localhost:5432/premix_bench".to_string()
+        })
     }
 
     impl<'r> sqlx::FromRow<'r, SqliteRow> for SoftDeleteModel {
@@ -725,10 +737,7 @@ mod tests {
         fn has_soft_delete() -> bool {
             true
         }
-        async fn find_by_id<'a, E>(
-            _executor: E,
-            _id: i32,
-        ) -> Result<Option<Self>, sqlx::Error>
+        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
@@ -768,10 +777,7 @@ mod tests {
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(
-            _executor: E,
-            _id: i32,
-        ) -> Result<Option<Self>, sqlx::Error>
+        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
@@ -785,8 +791,7 @@ mod tests {
             "sync_items"
         }
         fn create_table_sql() -> String {
-            "CREATE TABLE IF NOT EXISTS sync_items (id INTEGER PRIMARY KEY, name TEXT);"
-                .to_string()
+            "CREATE TABLE IF NOT EXISTS sync_items (id INTEGER PRIMARY KEY, name TEXT);".to_string()
         }
         fn list_columns() -> Vec<String> {
             vec!["id".into(), "name".into()]
@@ -812,10 +817,7 @@ mod tests {
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(
-            _executor: E,
-            _id: i32,
-        ) -> Result<Option<Self>, sqlx::Error>
+        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
@@ -855,10 +857,7 @@ mod tests {
         fn has_soft_delete() -> bool {
             true
         }
-        async fn find_by_id<'a, E>(
-            _executor: E,
-            _id: i32,
-        ) -> Result<Option<Self>, sqlx::Error>
+        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
@@ -898,10 +897,7 @@ mod tests {
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(
-            _executor: E,
-            _id: i32,
-        ) -> Result<Option<Self>, sqlx::Error>
+        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
@@ -962,7 +958,10 @@ mod tests {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let query = SoftDeleteModel::find_in_pool(&pool);
         let err = query.to_update_sql(&serde_json::json!("bad")).unwrap_err();
-        assert!(err.to_string().contains("Bulk update requires a JSON object"));
+        assert!(
+            err.to_string()
+                .contains("Bulk update requires a JSON object")
+        );
     }
 
     #[tokio::test]
@@ -1084,9 +1083,7 @@ mod tests {
     #[tokio::test]
     async fn model_find_builds_query() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        let sql = DbModel::find(&pool)
-            .filter("status = 'active'")
-            .to_sql();
+        let sql = DbModel::find(&pool).filter("status = 'active'").to_sql();
         assert!(sql.contains("status = 'active'"));
     }
 
@@ -1133,10 +1130,11 @@ mod tests {
             .unwrap();
         assert_eq!(updated, 1);
 
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE status = 'active'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE status = 'active'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(count, 1);
     }
 
@@ -1165,9 +1163,7 @@ mod tests {
     #[tokio::test]
     async fn query_builder_update_binds_float() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query(
-            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, ratio REAL, deleted_at TEXT);",
-        )
+        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, ratio REAL, deleted_at TEXT);")
             .execute(&pool)
             .await
             .unwrap();
@@ -1193,10 +1189,12 @@ mod tests {
     #[tokio::test]
     async fn query_builder_update_rejects_unsupported_type() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query("INSERT INTO db_users (status) VALUES ('inactive');")
             .execute(&pool)
             .await
@@ -1213,10 +1211,12 @@ mod tests {
     #[tokio::test]
     async fn query_builder_soft_delete_executes() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query("INSERT INTO db_users (status) VALUES ('active');")
             .execute(&pool)
             .await
@@ -1229,10 +1229,11 @@ mod tests {
             .unwrap();
         assert_eq!(deleted, 1);
 
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE deleted_at IS NOT NULL")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE deleted_at IS NOT NULL")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(count, 1);
     }
 
@@ -1265,10 +1266,12 @@ mod tests {
     #[tokio::test]
     async fn query_builder_all_with_limit_offset() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query("INSERT INTO db_users (status) VALUES ('a'), ('b'), ('c');")
             .execute(&pool)
             .await
@@ -1287,10 +1290,12 @@ mod tests {
     #[tokio::test]
     async fn query_builder_all_excludes_soft_deleted_by_default() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO db_users (status, deleted_at) VALUES ('active', NULL), ('gone', 'x');",
         )
@@ -1380,27 +1385,31 @@ mod tests {
             .update(serde_json::json!({ "status": "active" }))
             .await
             .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("Refusing bulk update without filters"));
+        assert!(
+            err.to_string()
+                .contains("Refusing bulk update without filters")
+        );
     }
 
     #[tokio::test]
     async fn query_builder_delete_without_filters_is_rejected() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let err = DbHardModel::find_in_pool(&pool).delete().await.unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("Refusing bulk delete without filters"));
+        assert!(
+            err.to_string()
+                .contains("Refusing bulk delete without filters")
+        );
     }
 
     #[tokio::test]
     async fn query_builder_update_rollback_does_not_persist() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query("CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query("INSERT INTO db_users (status) VALUES ('inactive');")
             .execute(&pool)
             .await
@@ -1415,10 +1424,11 @@ mod tests {
         assert_eq!(updated, 1);
         tx.rollback().await.unwrap();
 
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE status = 'active'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM db_users WHERE status = 'active'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(count, 0);
     }
 
@@ -1480,7 +1490,10 @@ mod tests {
             deleted_at: None,
         };
         db.save(&pool).await.unwrap();
-        assert_eq!(db.update(&pool).await.unwrap(), UpdateResult::NotImplemented);
+        assert_eq!(
+            db.update(&pool).await.unwrap(),
+            UpdateResult::NotImplemented
+        );
         db.delete(&pool).await.unwrap();
         assert!(DbModel::find_by_id(&pool, 1).await.unwrap().is_none());
 
@@ -1507,7 +1520,12 @@ mod tests {
             UpdateResult::NotImplemented
         );
         soft.delete(&pool).await.unwrap();
-        assert!(SoftDeleteModel::find_by_id(&pool, 3).await.unwrap().is_none());
+        assert!(
+            SoftDeleteModel::find_by_id(&pool, 3)
+                .await
+                .unwrap()
+                .is_none()
+        );
 
         let mut hard_only = HardDeleteModel { id: 4 };
         hard_only.save(&pool).await.unwrap();
@@ -1701,7 +1719,10 @@ mod tests {
             .update(serde_json::json!("bad"))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("Bulk update requires a JSON object"));
+        assert!(
+            err.to_string()
+                .contains("Bulk update requires a JSON object")
+        );
     }
 
     #[tokio::test]
@@ -1718,12 +1739,10 @@ mod tests {
     #[tokio::test]
     async fn bulk_update_binds_integers() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query(
-            "CREATE TABLE users (id INTEGER PRIMARY KEY, age INTEGER, deleted_at TEXT)",
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, age INTEGER, deleted_at TEXT)")
+            .execute(&pool)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO users (id, age, deleted_at) VALUES (1, 10, NULL)")
             .execute(&pool)
             .await

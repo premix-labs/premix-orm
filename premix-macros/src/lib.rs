@@ -24,8 +24,9 @@ fn derive_model_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStrea
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use syn::parse_quote;
+
+    use super::*;
 
     #[test]
     fn generate_generic_impl_includes_table_and_columns() {
@@ -149,7 +150,6 @@ mod tests {
         assert!(err.to_string().contains("only supports structs"));
     }
 
-
     #[test]
     fn generate_generic_impl_includes_soft_delete_delete_impl() {
         let input: DeriveInput = parse_quote! {
@@ -204,7 +204,6 @@ mod tests {
         assert!(tokens.contains("\"user_id\""));
         assert!(tokens.contains("\"is_active\""));
     }
-
 }
 
 fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {

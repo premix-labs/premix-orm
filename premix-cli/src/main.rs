@@ -205,18 +205,17 @@ fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Err
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::{
-        env,
-        fs,
+        env, fs,
         sync::Mutex,
         time::{SystemTime, UNIX_EPOCH},
     };
 
+    use super::*;
+
     static ENV_LOCK: Mutex<()> = Mutex::new(());
     static CWD_LOCK: Mutex<()> = Mutex::new(());
-    static TEMP_COUNTER: std::sync::atomic::AtomicUsize =
-        std::sync::atomic::AtomicUsize::new(0);
+    static TEMP_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
     fn make_temp_dir() -> std::path::PathBuf {
         let nanos = SystemTime::now()
@@ -431,14 +430,9 @@ mod tests {
 
     #[test]
     fn cli_parses_migrate_up_with_db() {
-        let cli = Cli::try_parse_from([
-            "premix",
-            "migrate",
-            "up",
-            "--database",
-            "sqlite:premix.db",
-        ])
-        .unwrap();
+        let cli =
+            Cli::try_parse_from(["premix", "migrate", "up", "--database", "sqlite:premix.db"])
+                .unwrap();
         match cli.command {
             Commands::Migrate { action } => match action {
                 MigrateAction::Up { database } => {
@@ -522,7 +516,11 @@ mod tests {
 
     #[tokio::test]
     async fn cli_run_init_ok() {
-        run_cli(Cli { command: Commands::Init }).await.unwrap();
+        run_cli(Cli {
+            command: Commands::Init,
+        })
+        .await
+        .unwrap();
     }
 
     #[tokio::test]

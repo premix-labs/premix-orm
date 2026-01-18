@@ -1,6 +1,8 @@
-use premix_core::{Model as PremixModel, Premix, UpdateResult};
+use premix_core::{
+    Model as PremixModel, Premix, UpdateResult,
+    sqlx::{self, Sqlite, SqlitePool},
+};
 use premix_macros::Model;
-use premix_core::sqlx::{self, Sqlite, SqlitePool};
 
 #[derive(Model, Debug)]
 #[has_many(Post)]
@@ -31,7 +33,10 @@ struct Account {
 #[test]
 fn derive_model_generates_metadata() {
     assert_eq!(<User as PremixModel<Sqlite>>::table_name(), "users");
-    assert!(<User as PremixModel<Sqlite>>::create_table_sql().contains("CREATE TABLE IF NOT EXISTS users"));
+    assert!(
+        <User as PremixModel<Sqlite>>::create_table_sql()
+            .contains("CREATE TABLE IF NOT EXISTS users")
+    );
     assert!(<User as PremixModel<Sqlite>>::list_columns().contains(&"name".to_string()));
     assert!(<User as PremixModel<Sqlite>>::list_columns().contains(&"deleted_at".to_string()));
     assert!(<User as PremixModel<Sqlite>>::has_soft_delete());

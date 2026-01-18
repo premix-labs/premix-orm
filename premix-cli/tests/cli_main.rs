@@ -1,7 +1,9 @@
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fs,
+    path::PathBuf,
+    process::Command,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 fn bin_path() -> PathBuf {
     let exe = std::env::current_exe().expect("failed to locate test binary");

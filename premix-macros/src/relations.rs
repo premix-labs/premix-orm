@@ -136,8 +136,9 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use syn::parse_quote;
+
+    use super::*;
 
     #[test]
     fn impl_relations_generates_methods() {

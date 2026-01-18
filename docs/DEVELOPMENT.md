@@ -1,8 +1,8 @@
 # Master Flowplan: Premix ORM
 
 ## Project Concept
-**Concept:** The "Holy Grail" of Rust ORMs.
-**Slogan:** "Write Rust, run optimized SQL."
+**Concept:** The "Holy Grail" of Rust ORMs.  
+**Slogan:** "Write Rust, run optimized SQL."  
 **Status:** Research prototype; production use is not recommended yet.
 
 ## 1. Core Philosophy (5 Pillars of a Great ORM)
@@ -46,11 +46,11 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 ## 2. Development Flowplan
 
-### Phase 0: Setup and Architecture - COMPLETED
+### Phase 0: Setup and Architecture - ✅ COMPLETED
 **Mission:** Lay the foundation for a scalable project structure.
 
 - [x] Project initialization (Cargo workspace).
-- [x] Module separation (`premix-core` runtime, `premix-macros` compiler).
+- [x] Module separation (premix-core runtime, premix-macros compiler).
 - [x] Basic `#[derive(Model)]` macro.
 - [x] Table name generation (`User` -> `users`).
 - [x] Column extraction from struct fields.
@@ -60,7 +60,7 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 - Macro engine: `syn`, `quote`, `proc-macro2`
 - Runtime: `tokio`
 
-### Phase 1: The CRUD Engine - COMPLETED
+### Phase 1: The CRUD Engine - ✅ COMPLETED
 **Mission:** Basic persistence and querying.
 
 - [x] Type mapping system (`i32` -> `INTEGER`, `String` -> `TEXT`).
@@ -68,7 +68,7 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 **Milestone 1:** `User::new().save().await` persists data to a real database.
 
-### Phase 2: The Migration Magic - COMPLETED
+### Phase 2: The Migration Magic - ✅ COMPLETED
 **Mission:** Avoid manual SQL for schema changes.
 
 - [x] Schema introspection.
@@ -77,7 +77,7 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 **Milestone 2:** Add a field to a struct, run sync, and the database updates.
 
-### Phase 3: Relations and Optimization - COMPLETED
+### Phase 3: Relations and Optimization - ✅ COMPLETED
 **Mission:** Solve N+1 and provide fluent queries.
 
 - [x] Relation macros: `#[has_many]`, `#[belongs_to]`.
@@ -87,7 +87,7 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 **Milestone 3:** Fetch 100 users and posts without N+1 queries.
 
-### Phase 4: Developer Experience - COMPLETED
+### Phase 4: Developer Experience - ✅ COMPLETED
 **Mission:** Make the ORM usable in real projects.
 
 - [x] CLI tool (`premix-cli`).
@@ -96,7 +96,7 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 **Milestone 4:** Full ecosystem for both runtime and DX.
 
-### Phase 5: Enterprise Standard - COMPLETED
+### Phase 5: Enterprise Standard - ✅ COMPLETED
 **Mission:** Support real-world complexity.
 
 - [x] Observability via `tracing`.
@@ -107,7 +107,7 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 **Milestone 5:** Ready for large-scale systems.
 
-### Phase 6: The Versatility - COMPLETED
+### Phase 6: The Versatility - ✅ COMPLETED
 **Mission:** Remove limitations and support multiple databases.
 
 - [x] Multi-database architecture via `SqlDialect`.
@@ -119,7 +119,7 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 **Milestone 6:** Multi-DB support and bulk ops in place.
 
-### Phase 7: DevOps (Versioned Migrations) - COMPLETED
+### Phase 7: DevOps (Versioned Migrations) - ✅ COMPLETED
 **Mission:** Support team workflows and release readiness.
 
 - [x] `premix-cli migrate` command family.
@@ -128,25 +128,25 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 **Milestone 7:** Production migration system ready.
 
-### Phase 8: The Scale - PLANNED
+### Phase 8: The Scale - 📝 PLANNED
 **Mission:** High availability for large systems.
 
 - [ ] Read/write splitting (primary + replicas).
 - [ ] Connection resolver for multi-tenancy.
 
-### Phase 9: Advanced Relations - DEFERRED
+### Phase 9: Advanced Relations - ⏳ DEFERRED
 **Mission:** Support advanced/niche modeling.
 
 - [ ] Polymorphic relations.
 - [ ] Declarative schema definitions.
 
-### Phase 10: Legacy Support - PLANNED
+### Phase 10: Legacy Support - 📝 PLANNED
 **Mission:** Support brownfield projects.
 
 - [ ] Composite primary keys.
 - [ ] Custom Postgres types and domains.
 
-### Optional: Futurism - PLANNED
+### Optional: Futurism - 📝 PLANNED
 **Mission:** Prepare for long-term trends.
 
 - [ ] Vector types and semantic search.
@@ -172,8 +172,8 @@ Scripts live under `scripts/`:
 
 ### `scripts/ci` (Quality Assurance)
 - `check_all.ps1`: Build, test, clippy, format.
-- `check_audit.ps1`: Security scan via `cargo audit`.
-- `check_coverage.ps1`: Code coverage via `cargo tarpaulin`.
+- `check_audit.ps1`: Security scan via cargo audit.
+- `check_coverage.ps1`: Code coverage via cargo tarpaulin.
 
 ### `scripts/bench` (Performance)
 - `bench_orm.ps1`: SQLite benchmark vs other ORMs.

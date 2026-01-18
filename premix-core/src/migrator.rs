@@ -139,10 +139,12 @@ impl Migrator<sqlx::Postgres> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use sqlx::sqlite::SqlitePoolOptions;
     #[cfg(feature = "postgres")]
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    use super::*;
 
     #[cfg(feature = "postgres")]
     async fn pg_pool_or_skip() -> Option<sqlx::Pool<sqlx::Postgres>> {
@@ -275,23 +277,21 @@ mod tests {
 
         migrator.run(migrations.clone()).await.unwrap();
 
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM _premix_migrations WHERE version = $1",
-        )
-        .bind(&version)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations WHERE version = $1")
+                .bind(&version)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(count, 1);
 
         migrator.run(migrations).await.unwrap();
-        let count_after: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM _premix_migrations WHERE version = $1",
-        )
-        .bind(&version)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let count_after: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations WHERE version = $1")
+                .bind(&version)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(count_after, 1);
 
         let _ = sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_name))
@@ -336,13 +336,12 @@ mod tests {
                 .await
                 .unwrap();
         if table_exists.is_some() {
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM _premix_migrations WHERE version = $1",
-            )
-            .bind(&version)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations WHERE version = $1")
+                    .bind(&version)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
             assert_eq!(count, 0);
         }
 
