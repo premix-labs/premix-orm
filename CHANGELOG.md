@@ -12,11 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs:** Expanded README messaging (core philosophy summary, benchmarks highlights, badges/links, demo, pitfalls, compatibility).
 - **Docs:** Added mermaid diagrams to the book for migrations and relations flows.
 - **Assets:** Added product-first logo, banner, and architecture diagrams under `assets/`.
+- **Docs:** Added Thai developer guide (`docs/DEVELOPMENT_TH.md`).
 - **Tests:** Expanded unit/integration coverage for core and CLI paths.
 
 ### Changed
 - **CI:** Coverage script now excludes the proc-macro entry file for stable reporting.
 - **Versioning:** Bumped crate versions and docs to 1.0.4.
+- **Docs:** Replaced Mermaid diagrams with SVG assets in the book and README.
+- **Docs:** Refined `docs/DEVELOPMENT.md` wording for the latest flowplan narrative.
+
+### Fixed
+- **Build:** Removed duplicated `#[cfg]` attributes in `premix-core/src/lib.rs` to satisfy clippy.
 
 ## [1.0.3] - 2026-01-18
 
