@@ -1,0 +1,41 @@
+<svg width="1200" height="320" viewBox="0 0 1200 320" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="320" fill="#0B0F14"/>
+  <text x="60" y="60" fill="#F3F4F6" font-size="28" font-family="Segoe UI, Arial, sans-serif">
+    Relations: Lazy vs Eager
+  </text>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#E5E7EB">
+    <rect x="60" y="110" width="220" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="85" y="140">Lazy: Load Users</text>
+
+    <rect x="320" y="110" width="260" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="345" y="140">Query posts per user</text>
+
+    <rect x="620" y="110" width="180" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="655" y="140">N+1 queries</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#E5E7EB">
+    <rect x="60" y="210" width="220" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="85" y="240">Eager: Load Users</text>
+
+    <rect x="320" y="210" width="260" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="340" y="240">Single batched query</text>
+
+    <rect x="620" y="210" width="180" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="655" y="240">2 queries total</text>
+  </g>
+
+  <g stroke="#9CA3AF" stroke-width="2" marker-end="url(#arrow)">
+    <line x1="280" y1="135" x2="320" y2="135"/>
+    <line x1="580" y1="135" x2="620" y2="135"/>
+    <line x1="280" y1="235" x2="320" y2="235"/>
+    <line x1="580" y1="235" x2="620" y2="235"/>
+  </g>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+</svg>

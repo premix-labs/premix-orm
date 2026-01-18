@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Docs:** Added research status disclaimer across README files, the book introduction, and developer docs. Added `DISCLAIMER.md`.
+- **Docs:** Expanded README messaging (core philosophy summary, benchmarks highlights, badges/links, demo, pitfalls, compatibility).
+- **Docs:** Added mermaid diagrams to the book for migrations and relations flows.
+- **Assets:** Added product-first logo, banner, and architecture diagrams under `assets/`.
 - **Tests:** Expanded unit/integration coverage for core and CLI paths.
 
 ### Changed
 - **CI:** Coverage script now excludes the proc-macro entry file for stable reporting.
+- **Versioning:** Bumped crate versions and docs to 1.0.4.
 
 ## [1.0.3] - 2026-01-18
 

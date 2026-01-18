@@ -193,22 +193,7 @@ Release notes live in `CHANGELOG.md`, and the development roadmap is in
 
 ## How Premix Differs (Flow)
 
-```mermaid
-flowchart LR
-  subgraph Premix
-    A[Rust Model] --> B[Macros Generate Code]
-    B --> C[SQL Builders]
-    C --> D[sqlx Executor]
-    D --> E[(Database)]
-  end
-
-  subgraph Typical_ORM
-    F[Rust Model] --> G[Runtime ORM Layer]
-    G --> H[SQL Generation]
-    H --> I[Driver/Executor]
-    I --> J[(Database)]
-  end
-```
+![Premix vs Typical ORM Flow](assets/premix-orm-flow-compare.svg)
 
 ## Advanced Features
 

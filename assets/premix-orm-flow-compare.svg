@@ -1,0 +1,63 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="360" fill="#0B0F14"/>
+  <text x="60" y="60" fill="#F3F4F6" font-size="28" font-family="Segoe UI, Arial, sans-serif">
+    Premix vs Typical ORM Flow
+  </text>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="18" fill="#E5E7EB">
+    <text x="60" y="110">Premix</text>
+    <text x="60" y="230">Typical ORM</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="16">
+    <rect x="180" y="85" width="150" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="200" y="115" fill="#E5E7EB">Model</text>
+
+    <rect x="360" y="85" width="200" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="380" y="115" fill="#E5E7EB">Macros</text>
+
+    <rect x="600" y="85" width="200" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="620" y="115" fill="#E5E7EB">SQL Builders</text>
+
+    <rect x="840" y="85" width="160" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="860" y="115" fill="#E5E7EB">Executor</text>
+
+    <rect x="1030" y="85" width="120" height="50" rx="10" fill="#0F172A" stroke="#22D3EE" stroke-width="2"/>
+    <text x="1058" y="115" fill="#E5E7EB">DB</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="16">
+    <rect x="180" y="205" width="150" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="200" y="235" fill="#E5E7EB">Model</text>
+
+    <rect x="360" y="205" width="200" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="380" y="235" fill="#E5E7EB">Runtime Layer</text>
+
+    <rect x="600" y="205" width="200" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="620" y="235" fill="#E5E7EB">SQL Generation</text>
+
+    <rect x="840" y="205" width="160" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="860" y="235" fill="#E5E7EB">Executor</text>
+
+    <rect x="1030" y="205" width="120" height="50" rx="10" fill="#0F172A" stroke="#94A3B8" stroke-width="2"/>
+    <text x="1058" y="235" fill="#E5E7EB">DB</text>
+  </g>
+
+  <g stroke="#9CA3AF" stroke-width="2" marker-end="url(#arrow)">
+    <line x1="330" y1="110" x2="360" y2="110"/>
+    <line x1="560" y1="110" x2="600" y2="110"/>
+    <line x1="800" y1="110" x2="840" y2="110"/>
+    <line x1="1000" y1="110" x2="1030" y2="110"/>
+
+    <line x1="330" y1="230" x2="360" y2="230"/>
+    <line x1="560" y1="230" x2="600" y2="230"/>
+    <line x1="800" y1="230" x2="840" y2="230"/>
+    <line x1="1000" y1="230" x2="1030" y2="230"/>
+  </g>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6" fill="#9CA3AF"/>
+    </marker>
+  </defs>
+</svg>
