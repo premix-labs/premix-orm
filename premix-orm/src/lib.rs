@@ -69,6 +69,12 @@
 //! use premix_orm::prelude::*;
 //! use serde_json::json;
 //!
+//! #[derive(Model)]
+//! struct User {
+//!     id: i32,
+//!     status: String,
+//! }
+//!
 //! # async fn example(pool: premix_orm::sqlx::SqlitePool) -> Result<(), sqlx::Error> {
 //! let _updated = User::find_in_pool(&pool)
 //!     .filter("status = 'inactive'")
