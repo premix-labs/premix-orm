@@ -1,8 +1,48 @@
-//! Premix ORM Re-exports
+//! # Premix ORM 🚀
 //!
-//! This crate serves as a "facade" to simplify imports for Premix ORM users.
-//! Instead of depending on `premix-core` and `premix-macros` separately,
-//! you can just depend on `premix` and importing everything from here.
+//! > **"Write Rust, Run Optimized SQL."**
+//!
+//! Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need for manual migration files.
+//! It combines the ease of use of Active Record with the raw performance of handcrafted SQL.
+//!
+//! ## 🌟 Key Features
+//!
+//! - **🪄 Auto-Sync Schema**: Syncs your Rust structs directly to the database.
+//! - **⚡ Zero Overhead**: Uses macros to generate SQL at compile-time.
+//! - **🚀 Application-Level Joins**: Solves N+1 problems with smart `WHERE IN` queries.
+//! - **🌍 Multi-Database**: Support for SQLite, Postgres, and MySQL.
+//!
+//! ## 🚀 Quick Start
+//!
+//! ```rust,no_run
+//! use premix_orm::Model;
+//! use premix_orm::prelude::*; // Assuming prelude exists in core, or just use specific items
+//! use serde::{Serialize, Deserialize};
+//!
+//! #[derive(Model, Debug, Serialize, Deserialize)]
+//! struct User {
+//!     id: i32,
+//!     name: String,
+//! }
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Connect and Sync
+//! let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+//! premix_orm::Premix::sync::<User, _>(&pool).await?;
+//!
+//! // Create
+//! let mut user = User { id: 0, name: "Alice".to_string() };
+//! user.save(&pool).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## 📦 Installation
+//!
+//! ```toml
+//! [dependencies]
+//! premix-orm = "1.0.0"
+//! ```
 
 pub use premix_core::*;
 pub use premix_macros::Model;
