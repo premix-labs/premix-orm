@@ -40,7 +40,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! premix-orm = "1.0.1"
+//! premix-orm = "1.0.2"
 //! ```
 
 pub use premix_core::*;

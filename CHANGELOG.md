@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-01-18
+
+### Fixed 🐛
+- **Facade Sync:** Fixed a critical issue where the `premix-orm` facade could not find the `prelude` module in `premix-core` during publication.
+- **Doctests:** Fixed all documentation examples to ensure they compile and run correctly, supporting the `premix-orm` unified entry point.
+
 ## [1.0.1] - 2026-01-18
 
 ### Added 🚀
