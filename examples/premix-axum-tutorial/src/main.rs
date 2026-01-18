@@ -4,8 +4,7 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
-use premix_core::{Executor, Model, Premix};
-use premix_macros::Model;
+use premix_orm::{Executor, Model, Premix};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite, SqlitePool};
 use tracing::info;
@@ -147,10 +146,10 @@ async fn update_user(
 
     // Save changes
     match user.update(Executor::Pool(&state.db)).await {
-        Ok(premix_core::UpdateResult::Success) => Ok(Json(user)),
-        Ok(premix_core::UpdateResult::NotFound) => Err(StatusCode::NOT_FOUND),
-        Ok(premix_core::UpdateResult::VersionConflict) => Err(StatusCode::CONFLICT),
-        Ok(premix_core::UpdateResult::NotImplemented) => Err(StatusCode::NOT_IMPLEMENTED),
+        Ok(premix_orm::UpdateResult::Success) => Ok(Json(user)),
+        Ok(premix_orm::UpdateResult::NotFound) => Err(StatusCode::NOT_FOUND),
+        Ok(premix_orm::UpdateResult::VersionConflict) => Err(StatusCode::CONFLICT),
+        Ok(premix_orm::UpdateResult::NotImplemented) => Err(StatusCode::NOT_IMPLEMENTED),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
