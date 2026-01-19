@@ -13,12 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hooks/Validation:** Added opt-in custom hooks/validation via `#[premix(custom_hooks, custom_validation)]`.
 - **Docs:** Book now documents CLI sync and migrate down, plus updated hooks/validation guidance.
 - **Docs:** Added a dedicated `orm-book/book-examples` compile-check crate and validation notes.
+- **Benchmarks:** Added `scripts/bench/bench_repeat.ps1` to run repeatable multi-round benchmarks and save artifacts.
 
 ### Changed
 - **CLI:** Added database selection for `premix migrate down`.
 - **CLI:** Feature-gated Postgres support and updated compatibility notes.
 - **Tests:** Expanded CLI and migrator tests to cover rollback flows.
 - **Macros:** `#[derive(Model)]` now emits `premix-orm` paths; direct macro users must depend on `premix-orm`.
+- **Benchmarks:** Standardized Criterion config (warmup/measurement/sample size) across SQLite and Postgres benches.
+- **Docs:** Updated benchmark methodology/results and recorded multi-round median summaries.
 
 ## [1.0.4] - 2026-01-18
 

@@ -5,6 +5,8 @@
 use std::env;
 #[cfg(feature = "postgres")]
 use std::sync::atomic::{AtomicI32, Ordering};
+#[cfg(feature = "postgres")]
+use std::time::Duration;
 
 #[cfg(feature = "postgres")]
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -321,10 +323,12 @@ fn benchmark_io_concurrency(c: &mut Criterion) {
 
 #[cfg(feature = "postgres")]
 criterion_group!(
-    benches,
-    benchmark_io_insert,
-    benchmark_io_select,
-    benchmark_io_concurrency
+    name = benches;
+    config = Criterion::default()
+        .sample_size(50)
+        .warm_up_time(Duration::from_secs(3))
+        .measurement_time(Duration::from_secs(10));
+    targets = benchmark_io_insert, benchmark_io_select, benchmark_io_concurrency
 );
 
 #[cfg(feature = "postgres")]

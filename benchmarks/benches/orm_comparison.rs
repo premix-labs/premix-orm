@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::{
+    sync::atomic::{AtomicI32, Ordering},
+    time::Duration,
+};
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use premix_core::{Executor, Model as PremixModel, Premix, UpdateResult};
@@ -1060,17 +1063,26 @@ fn benchmark_soft_delete(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    benchmark_insert,
-    benchmark_select,
-    benchmark_bulk_select,
-    benchmark_relation,
-    benchmark_bulk_relation,
-    benchmark_update_delete,
-    benchmark_transactions,
-    benchmark_optimistic_locking,
-    benchmark_bulk_ops,
-    benchmark_soft_delete
-);
+fn criterion_config() -> Criterion {
+    Criterion::default()
+        .sample_size(50)
+        .warm_up_time(Duration::from_secs(3))
+        .measurement_time(Duration::from_secs(10))
+}
+
+criterion_group! {
+    name = benches;
+    config = criterion_config();
+    targets =
+        benchmark_insert,
+        benchmark_select,
+        benchmark_bulk_select,
+        benchmark_relation,
+        benchmark_bulk_relation,
+        benchmark_update_delete,
+        benchmark_transactions,
+        benchmark_optimistic_locking,
+        benchmark_bulk_ops,
+        benchmark_soft_delete
+}
 criterion_main!(benches);
