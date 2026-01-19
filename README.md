@@ -163,7 +163,7 @@ cd premix-demo
 
 ```toml
 [dependencies]
-premix-orm = "1.0.5"
+premix-orm = "1.0.5-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -260,7 +260,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = "1.0.5"
+premix-orm = "1.0.5-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

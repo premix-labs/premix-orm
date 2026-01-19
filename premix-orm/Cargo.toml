@@ -1,6 +1,6 @@
 [package]
 name = "premix-orm"
-version = "1.0.5"
+version = "1.0.5-alpha"
 edition = "2024"
 description = "The comprehensive ORM library for Rust. This is a facade crate for premix-core and premix-macros."
 license = "MIT"
@@ -16,8 +16,8 @@ postgres = ["premix-core/postgres"]
 mysql = ["premix-core/mysql"]
 
 [dependencies]
-premix-core = { version = "1.0.5", path = "../premix-core" }
-premix-macros = { version = "1.0.5", path = "../premix-macros" }
+premix-core = { version = "1.0.5-alpha", path = "../premix-core" }
+premix-macros = { version = "1.0.5-alpha", path = "../premix-macros" }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
