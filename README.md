@@ -17,7 +17,7 @@ Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need f
 > **Status (Alpha / Research Prototype)**  
 > Premix is a research prototype. APIs may change and production use is not recommended yet.  
 > See [DISCLAIMER.md](DISCLAIMER.md).  
-> Note: Versions 1.0.0–1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
+> Note: Versions 1.0.0-1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
 
 ## Why People Try Premix
 
@@ -185,7 +185,8 @@ Prefer a template? Start from `examples/basic-app` and modify as needed.
 ## Documentation
 
 For a longer-form guide, see `orm-book/` in this repository. It covers models,
-queries, relations, migrations, transactions, and limitations.
+queries, relations, migrations, transactions, and limitations. For a map of
+the project layout, see `docs/PROJECT_STRUCTURE.md`.
 
 ## Architecture (At a Glance)
 
