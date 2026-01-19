@@ -41,7 +41,8 @@ Why this is practical:
 - **Glass Box**: `to_sql()`/`to_update_sql()` let you inspect SQL before running it.
 - **Escape Hatch**: `Model::raw_sql()` gives full control for edge cases.
 
-See `docs/DEVELOPMENT.md` for the engineering flowplan and `docs/PHILOSOPHY_CHECKLIST.md` for status details.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the engineering flowplan and
+[docs/PHILOSOPHY_CHECKLIST.md](docs/PHILOSOPHY_CHECKLIST.md) for status details.
 
 ## Why Premix?
 
@@ -66,7 +67,7 @@ Highlights (median of medians across 3 rounds; see `docs/BENCHMARK_RESULTS.md`):
 - Bulk Update (1,000 rows): Premix **62.9 us** vs loop **27.2 ms** (~432x faster)
 - Postgres SELECT: Premix **56.6 us** vs raw SQL **53.1 us** (~same)
 
-Full results: `docs/BENCHMARK_RESULTS.md`
+Full results: [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md)
 
 | Operation | Premix | SeaORM | Rbatis | SQLx (Raw) |
 |-----------|--------|--------|--------|------------|
@@ -184,16 +185,16 @@ Prefer a template? Start from `examples/basic-app` and modify as needed.
 
 ## Documentation
 
-For a longer-form guide, see `orm-book/` in this repository. It covers models,
-queries, relations, migrations, transactions, and limitations. For a map of
-the project layout, see `docs/PROJECT_STRUCTURE.md`.
+For a longer-form guide, see [orm-book/](orm-book/) in this repository. It covers
+models, queries, relations, migrations, transactions, and limitations. For a map
+of the project layout, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
 
 ## Architecture (At a Glance)
 
 ![Premix ORM Architecture](assets/premix-orm-architecture.svg)
 
-Release notes live in `CHANGELOG.md`, and the development roadmap is in
-`docs/DEVELOPMENT.md`.
+Release notes live in [CHANGELOG.md](CHANGELOG.md), and the development roadmap is in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## How Premix Differs (Flow)
 
