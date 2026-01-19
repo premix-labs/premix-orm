@@ -7,7 +7,7 @@ definition, connection, schema sync, and a simple query.
 
 ```toml
 [dependencies]
-premix-orm = "1.0.4"
+premix-orm = "1.0.5"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 Enable the database features you need on both `premix-orm` and `sqlx`:
 
 ```toml
-premix-orm = { version = "1.0.4", features = ["postgres"] }
+premix-orm = { version = "1.0.5", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
@@ -132,5 +132,6 @@ premix migrate up
 
 - Enable database features on both `premix-orm` and `sqlx`.
 - The CLI reads `DATABASE_URL` or defaults to `sqlite:premix.db`.
-- `premix migrate down` is not implemented yet.
+- `premix migrate down` reverts the most recent migration.
 - `filter()` accepts raw SQL strings; use carefully to avoid injection.
+

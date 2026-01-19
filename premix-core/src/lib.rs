@@ -211,7 +211,6 @@ pub trait ModelHooks {
     }
 }
 
-
 // Chapter 9: Optimistic Locking
 #[derive(Debug, PartialEq)]
 pub enum UpdateResult {
@@ -233,7 +232,6 @@ pub trait ModelValidation {
         Ok(())
     }
 }
-
 
 #[async_trait::async_trait]
 pub trait Model<DB: Database>: Sized + Send + Sync + Unpin

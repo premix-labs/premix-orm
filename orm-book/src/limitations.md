@@ -24,7 +24,7 @@ This section documents current constraints so expectations are clear.
 ## Migrations
 
 - The CLI currently targets SQLite by default.
-- `premix migrate down` is not implemented yet.
+- `premix migrate down` only reverts the most recent migration.
 - Auto-sync is intended for development, not production.
 
 ## Soft Delete

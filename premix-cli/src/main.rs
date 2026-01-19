@@ -6,7 +6,7 @@ use premix_core::{Migration, Migrator};
 #[cfg(feature = "postgres")]
 use sqlx::postgres::PgPoolOptions;
 #[cfg(feature = "sqlite")]
-use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 use walkdir::WalkDir;
 
 #[derive(Parser)]
@@ -163,7 +163,10 @@ async fn run_migrations_up(
 
         #[cfg(not(feature = "postgres"))]
         {
-            return Err("Postgres support is not enabled. Rebuild premix-cli with --features postgres.".into());
+            return Err(
+                "Postgres support is not enabled. Rebuild premix-cli with --features postgres."
+                    .into(),
+            );
         }
     }
 
@@ -173,7 +176,7 @@ async fn run_migrations_up(
         let pool = SqlitePool::connect_with(options).await?;
         let migrator = Migrator::new(pool);
         migrator.run(migrations).await?;
-        return Ok(true);
+        Ok(true)
     }
 
     #[cfg(not(feature = "sqlite"))]
@@ -202,7 +205,10 @@ async fn run_migrations_down(
 
         #[cfg(not(feature = "postgres"))]
         {
-            return Err("Postgres support is not enabled. Rebuild premix-cli with --features postgres.".into());
+            return Err(
+                "Postgres support is not enabled. Rebuild premix-cli with --features postgres."
+                    .into(),
+            );
         }
     }
 
@@ -305,8 +311,9 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::*;
     use sqlx::SqlitePool;
+
+    use super::*;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
     static CWD_LOCK: Mutex<()> = Mutex::new(());

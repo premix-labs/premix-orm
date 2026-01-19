@@ -79,10 +79,7 @@ impl Migrator<sqlx::Sqlite> {
         Ok(())
     }
 
-    pub async fn rollback_last(
-        &self,
-        migrations: Vec<Migration>,
-    ) -> Result<bool, Box<dyn Error>> {
+    pub async fn rollback_last(&self, migrations: Vec<Migration>) -> Result<bool, Box<dyn Error>> {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
@@ -95,11 +92,22 @@ impl Migrator<sqlx::Sqlite> {
         .execute(&mut *tx)
         .await?;
 
-        let last: Option<AppliedMigration> = sqlx::query_as::<_, AppliedMigration>(
-            "SELECT version FROM _premix_migrations ORDER BY version DESC LIMIT 1",
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
+        let versions: Vec<String> = migrations.iter().map(|m| m.version.clone()).collect();
+        if versions.is_empty() {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        let placeholders = vec!["?"; versions.len()].join(", ");
+        let sql = format!(
+            "SELECT version FROM _premix_migrations WHERE version IN ({}) ORDER BY version DESC LIMIT 1",
+            placeholders
+        );
+        let mut query = sqlx::query_scalar::<_, String>(&sql);
+        for version in &versions {
+            query = query.bind(version);
+        }
+        let last = query.fetch_optional(&mut *tx).await?;
 
         let Some(last) = last else {
             tx.commit().await?;
@@ -108,8 +116,8 @@ impl Migrator<sqlx::Sqlite> {
 
         let migration = migrations
             .into_iter()
-            .find(|m| m.version == last.version)
-            .ok_or_else(|| format!("Migration {} not found.", last.version))?;
+            .find(|m| m.version == last)
+            .ok_or_else(|| format!("Migration {} not found.", last))?;
 
         if migration.down_sql.trim().is_empty() {
             return Err("Down migration is empty.".into());
@@ -182,10 +190,7 @@ impl Migrator<sqlx::Postgres> {
         Ok(())
     }
 
-    pub async fn rollback_last(
-        &self,
-        migrations: Vec<Migration>,
-    ) -> Result<bool, Box<dyn Error>> {
+    pub async fn rollback_last(&self, migrations: Vec<Migration>) -> Result<bool, Box<dyn Error>> {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
@@ -198,9 +203,16 @@ impl Migrator<sqlx::Postgres> {
         .execute(&mut *tx)
         .await?;
 
-        let last: Option<AppliedMigration> = sqlx::query_as::<_, AppliedMigration>(
-            "SELECT version FROM _premix_migrations ORDER BY version DESC LIMIT 1",
+        let versions: Vec<String> = migrations.iter().map(|m| m.version.clone()).collect();
+        if versions.is_empty() {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        let last = sqlx::query_scalar::<_, String>(
+            "SELECT version FROM _premix_migrations WHERE version = ANY($1) ORDER BY version DESC LIMIT 1",
         )
+        .bind(&versions)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -211,8 +223,8 @@ impl Migrator<sqlx::Postgres> {
 
         let migration = migrations
             .into_iter()
-            .find(|m| m.version == last.version)
-            .ok_or_else(|| format!("Migration {} not found.", last.version))?;
+            .find(|m| m.version == last)
+            .ok_or_else(|| format!("Migration {} not found.", last))?;
 
         if migration.down_sql.trim().is_empty() {
             return Err("Down migration is empty.".into());

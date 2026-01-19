@@ -8,3 +8,4 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 premix-core = { path = "../../premix-core" }
 premix-macros = { path = "../../premix-macros" }
+premix-orm = { path = "../../premix-orm" }

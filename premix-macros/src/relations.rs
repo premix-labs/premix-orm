@@ -33,20 +33,20 @@ fn generate_has_many(parent: &Ident, child: &Ident) -> TokenStream {
     let fk = format!("{}_id", parent.to_string().to_lowercase());
 
     quote! {
-        pub async fn #method_name<'e, E, DB>(&self, executor: E) -> Result<Vec<#child>, premix_core::sqlx::Error>
+        pub async fn #method_name<'e, E, DB>(&self, executor: E) -> Result<Vec<#child>, premix_orm::sqlx::Error>
         where
-            DB: premix_core::SqlDialect,
-            E: premix_core::IntoExecutor<'e, DB = DB>,
-            #parent: premix_core::Model<DB>,
-            #child: premix_core::Model<DB>,
-            for<'q> <DB as premix_core::sqlx::Database>::Arguments<'q>: premix_core::sqlx::IntoArguments<'q, DB>,
-            for<'c> &'c mut <DB as premix_core::sqlx::Database>::Connection: premix_core::sqlx::Executor<'c, Database = DB>,
-            i32: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB>,
+            DB: premix_orm::SqlDialect,
+            E: premix_orm::IntoExecutor<'e, DB = DB>,
+            #parent: premix_orm::Model<DB>,
+            #child: premix_orm::Model<DB>,
+            for<'q> <DB as premix_orm::sqlx::Database>::Arguments<'q>: premix_orm::sqlx::IntoArguments<'q, DB>,
+            for<'c> &'c mut <DB as premix_orm::sqlx::Database>::Connection: premix_orm::sqlx::Executor<'c, Database = DB>,
+            i32: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB>,
         {
             let mut executor = executor.into_executor();
-            let p = <DB as premix_core::SqlDialect>::placeholder(1);
+            let p = <DB as premix_orm::SqlDialect>::placeholder(1);
             let sql = format!("SELECT * FROM {} WHERE {} = {}", #child_table, #fk, p);
-            let query = premix_core::sqlx::query_as::<DB, #child>(&sql).bind(self.id);
+            let query = premix_orm::sqlx::query_as::<DB, #child>(&sql).bind(self.id);
             executor.fetch_all(query).await
         }
     }
@@ -58,20 +58,20 @@ fn generate_belongs_to(child: &Ident, parent: &Ident) -> TokenStream {
     let fk = format_ident!("{}_id", parent.to_string().to_lowercase());
 
     quote! {
-        pub async fn #method_name<'e, E, DB>(&self, executor: E) -> Result<Option<#parent>, premix_core::sqlx::Error>
+        pub async fn #method_name<'e, E, DB>(&self, executor: E) -> Result<Option<#parent>, premix_orm::sqlx::Error>
         where
-            DB: premix_core::SqlDialect,
-            E: premix_core::IntoExecutor<'e, DB = DB>,
-            #child: premix_core::Model<DB>,
-            #parent: premix_core::Model<DB>,
-            for<'q> <DB as premix_core::sqlx::Database>::Arguments<'q>: premix_core::sqlx::IntoArguments<'q, DB>,
-            for<'c> &'c mut <DB as premix_core::sqlx::Database>::Connection: premix_core::sqlx::Executor<'c, Database = DB>,
-            i32: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB>,
+            DB: premix_orm::SqlDialect,
+            E: premix_orm::IntoExecutor<'e, DB = DB>,
+            #child: premix_orm::Model<DB>,
+            #parent: premix_orm::Model<DB>,
+            for<'q> <DB as premix_orm::sqlx::Database>::Arguments<'q>: premix_orm::sqlx::IntoArguments<'q, DB>,
+            for<'c> &'c mut <DB as premix_orm::sqlx::Database>::Connection: premix_orm::sqlx::Executor<'c, Database = DB>,
+            i32: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB>,
         {
             let mut executor = executor.into_executor();
-            let p = <DB as premix_core::SqlDialect>::placeholder(1);
+            let p = <DB as premix_orm::SqlDialect>::placeholder(1);
             let sql = format!("SELECT * FROM {} WHERE id = {}", #parent_table, p);
-            let query = premix_core::sqlx::query_as::<DB, #parent>(&sql).bind(self.#fk);
+            let query = premix_orm::sqlx::query_as::<DB, #parent>(&sql).bind(self.#fk);
             executor.fetch_optional(query).await
         }
     }
@@ -100,9 +100,9 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                             #relation_name => {
                                 let ids: Vec<i32> = models.iter().map(|m| m.id).collect();
                                 if ids.is_empty() { return Ok(()); }
-                                let params = (1..=ids.len()).map(|i| <DB as premix_core::SqlDialect>::placeholder(i)).collect::<Vec<_>>().join(",");
+                                let params = (1..=ids.len()).map(|i| <DB as premix_orm::SqlDialect>::placeholder(i)).collect::<Vec<_>>().join(",");
                                 let sql = format!("SELECT * FROM {} WHERE {} IN ({})", #child_table, #parent_fk_str, params);
-                                let mut query = premix_core::sqlx::query_as::<DB, #child_model>(&sql);
+                                let mut query = premix_orm::sqlx::query_as::<DB, #child_model>(&sql);
                                 for id in ids { query = query.bind(id); }
 
                                 let children = executor.fetch_all(query).await?;

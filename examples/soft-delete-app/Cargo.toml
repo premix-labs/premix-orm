@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 premix-core = { path = "../../premix-core" }
 premix-macros = { path = "../../premix-macros" }
+premix-orm = { path = "../../premix-orm" }
 tokio = { version = "1.49.0", features = ["full"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "sqlite"] }
 tracing = "0.1.44"

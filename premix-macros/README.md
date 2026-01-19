@@ -10,11 +10,13 @@ This crate is part of a research prototype. APIs may change and production use i
 
 ## Installation
 
-Most users should add `premix-orm` instead. Use `premix-macros` directly only if needed.
+Most users should add `premix-orm` instead. If you use `premix-macros`
+directly, you still need `premix-orm` because the generated code references it.
 
 ```toml
 [dependencies]
-premix-macros = "1.0.4"
+premix-orm = "1.0.5"
+premix-macros = "1.0.5"
 ```
 
 ## Quick Start
@@ -42,3 +44,4 @@ This derives:
 ## License
 
 This project is licensed under the [MIT license](LICENSE).
+

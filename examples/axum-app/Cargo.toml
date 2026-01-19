@@ -13,3 +13,4 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
 # Premix ORM
 premix-core = { path = "../../premix-core" }
 premix-macros = { path = "../../premix-macros" }
+premix-orm = { path = "../../premix-orm" }

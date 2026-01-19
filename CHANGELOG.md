@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI:** Added database selection for `premix migrate down`.
 - **CLI:** Feature-gated Postgres support and updated compatibility notes.
 - **Tests:** Expanded CLI and migrator tests to cover rollback flows.
+- **Macros:** `#[derive(Model)]` now emits `premix-orm` paths; direct macro users must depend on `premix-orm`.
 
 ## [1.0.4] - 2026-01-18
 

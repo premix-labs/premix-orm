@@ -7,14 +7,14 @@ Premix supports SQLite, Postgres, and MySQL through `sqlx`.
 SQLite is enabled by default. Enable other databases explicitly:
 
 ```toml
-premix-orm = { version = "1.0.4", features = ["postgres"] }
+premix-orm = { version = "1.0.5", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
 For MySQL:
 
 ```toml
-premix-orm = { version = "1.0.4", features = ["mysql"] }
+premix-orm = { version = "1.0.5", features = ["mysql"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "mysql"] }
 ```
 
@@ -51,3 +51,4 @@ This allows `Model<DB>` and `QueryBuilder<DB>` to work across databases.
   support is feature-gated but not covered by the book examples yet.
 - SQLite and Postgres differ in type semantics; prefer explicit migrations for
   production schemas.
+

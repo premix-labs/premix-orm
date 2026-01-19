@@ -88,7 +88,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! premix-orm = "1.0.4"
+//! premix-orm = "1.0.5"
 //! ```
 //!
 //! ## Book

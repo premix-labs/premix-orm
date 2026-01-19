@@ -117,8 +117,8 @@ mod tests {
             }
         };
         let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(!tokens.contains("impl premix_core :: ModelHooks"));
-        assert!(!tokens.contains("impl premix_core :: ModelValidation"));
+        assert!(!tokens.contains("impl premix_orm :: ModelHooks"));
+        assert!(!tokens.contains("impl premix_orm :: ModelValidation"));
     }
 
     #[test]
@@ -218,7 +218,7 @@ mod tests {
             }
         };
         let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("Post : premix_core :: Model < DB >"));
+        assert!(tokens.contains("Post : premix_orm :: Model < DB >"));
     }
 
     #[test]
@@ -284,66 +284,66 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
     let update_impl = if has_version {
         quote! {
-            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_core::UpdateResult, premix_core::sqlx::Error>
+            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>
             where
-                E: premix_core::IntoExecutor<'a, DB = DB>
+                E: premix_orm::IntoExecutor<'a, DB = DB>
             {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_core::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
-                let id_p = <DB as premix_core::SqlDialect>::placeholder(1 + #field_idents_len);
-                let ver_p = <DB as premix_core::SqlDialect>::placeholder(2 + #field_idents_len);
+                let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_orm::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
+                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                let ver_p = <DB as premix_orm::SqlDialect>::placeholder(2 + #field_idents_len);
                 let sql = format!(
                     "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
                     table_name, set_clause, id_p, ver_p
                 );
 
-                let mut query = premix_core::sqlx::query::<DB>(&sql)
+                let mut query = premix_orm::sqlx::query::<DB>(&sql)
                     #( .bind(&self.#field_idents) )*
                     .bind(&self.id)
                     .bind(&self.version);
 
                 let result = executor.execute(query).await?;
 
-                if <DB as premix_core::SqlDialect>::rows_affected(&result) == 0 {
-                    let exists_p = <DB as premix_core::SqlDialect>::placeholder(1);
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) == 0 {
+                    let exists_p = <DB as premix_orm::SqlDialect>::placeholder(1);
                     let exists_sql = format!("SELECT id FROM {} WHERE id = {}", table_name, exists_p);
-                    let exists_query = premix_core::sqlx::query_as::<DB, (i32,)>(&exists_sql).bind(&self.id);
+                    let exists_query = premix_orm::sqlx::query_as::<DB, (i32,)>(&exists_sql).bind(&self.id);
                     let exists = executor.fetch_optional(exists_query).await?;
 
                     if exists.is_none() {
-                        Ok(premix_core::UpdateResult::NotFound)
+                        Ok(premix_orm::UpdateResult::NotFound)
                     } else {
-                        Ok(premix_core::UpdateResult::VersionConflict)
+                        Ok(premix_orm::UpdateResult::VersionConflict)
                     }
                 } else {
                     self.version += 1;
-                    Ok(premix_core::UpdateResult::Success)
+                    Ok(premix_orm::UpdateResult::Success)
                 }
             }
         }
     } else {
         quote! {
-            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_core::UpdateResult, premix_core::sqlx::Error>
+            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>
             where
-                E: premix_core::IntoExecutor<'a, DB = DB>
+                E: premix_orm::IntoExecutor<'a, DB = DB>
             {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_core::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
-                let id_p = <DB as premix_core::SqlDialect>::placeholder(1 + #field_idents_len);
+                let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_orm::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
+                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
                 let sql = format!("UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
 
-                let mut query = premix_core::sqlx::query::<DB>(&sql)
+                let mut query = premix_orm::sqlx::query::<DB>(&sql)
                     #( .bind(&self.#field_idents) )*
                     .bind(&self.id);
 
                 let result = executor.execute(query).await?;
 
-                if <DB as premix_core::SqlDialect>::rows_affected(&result) == 0 {
-                    Ok(premix_core::UpdateResult::NotFound)
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) == 0 {
+                    Ok(premix_orm::UpdateResult::NotFound)
                 } else {
-                    Ok(premix_core::UpdateResult::Success)
+                    Ok(premix_orm::UpdateResult::Success)
                 }
             }
         }
@@ -351,16 +351,16 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
     let delete_impl = if has_soft_delete {
         quote! {
-            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_core::sqlx::Error>
+            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_orm::sqlx::Error>
             where
-                E: premix_core::IntoExecutor<'a, DB = DB>
+                E: premix_orm::IntoExecutor<'a, DB = DB>
             {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let id_p = <DB as premix_core::SqlDialect>::placeholder(1);
-                let sql = format!("UPDATE {} SET deleted_at = {} WHERE id = {}", table_name, <DB as premix_core::SqlDialect>::current_timestamp_fn(), id_p);
+                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                let sql = format!("UPDATE {} SET deleted_at = {} WHERE id = {}", table_name, <DB as premix_orm::SqlDialect>::current_timestamp_fn(), id_p);
 
-                let query = premix_core::sqlx::query::<DB>(&sql).bind(&self.id);
+                let query = premix_orm::sqlx::query::<DB>(&sql).bind(&self.id);
                 executor.execute(query).await?;
 
                 self.deleted_at = Some("DELETED".to_string());
@@ -370,16 +370,16 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         }
     } else {
         quote! {
-            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_core::sqlx::Error>
+            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_orm::sqlx::Error>
             where
-                E: premix_core::IntoExecutor<'a, DB = DB>
+                E: premix_orm::IntoExecutor<'a, DB = DB>
             {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let id_p = <DB as premix_core::SqlDialect>::placeholder(1);
+                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
                 let sql = format!("DELETE FROM {} WHERE id = {}", table_name, id_p);
 
-                let query = premix_core::sqlx::query::<DB>(&sql).bind(&self.id);
+                let query = premix_orm::sqlx::query::<DB>(&sql).bind(&self.id);
                 executor.execute(query).await?;
 
                 Ok(())
@@ -394,7 +394,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             if (attr.path().is_ident("has_many") || attr.path().is_ident("belongs_to"))
                 && let Ok(related_ident) = attr.parse_args::<syn::Ident>()
             {
-                related_model_bounds.push(quote! { #related_ident: premix_core::Model<DB> });
+                related_model_bounds.push(quote! { #related_ident: premix_orm::Model<DB> });
             }
         }
     }
@@ -403,8 +403,8 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         quote! {}
     } else {
         quote! {
-            #[premix_core::async_trait::async_trait]
-            impl premix_core::ModelHooks for #struct_name {}
+            #[premix_orm::async_trait::async_trait]
+            impl premix_orm::ModelHooks for #struct_name {}
         }
     };
 
@@ -412,23 +412,23 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         quote! {}
     } else {
         quote! {
-            impl premix_core::ModelValidation for #struct_name {}
+            impl premix_orm::ModelValidation for #struct_name {}
         }
     };
 
     // Generic Implementation
     Ok(quote! {
-        impl<'r, R> premix_core::sqlx::FromRow<'r, R> for #struct_name
+        impl<'r, R> premix_orm::sqlx::FromRow<'r, R> for #struct_name
         where
-            R: premix_core::sqlx::Row,
-            R::Database: premix_core::sqlx::Database,
+            R: premix_orm::sqlx::Row,
+            R::Database: premix_orm::sqlx::Database,
             #(
-                #field_types: premix_core::sqlx::Type<R::Database> + premix_core::sqlx::Decode<'r, R::Database>,
+                #field_types: premix_orm::sqlx::Type<R::Database> + premix_orm::sqlx::Decode<'r, R::Database>,
             )*
-            for<'c> &'c str: premix_core::sqlx::ColumnIndex<R>,
+            for<'c> &'c str: premix_orm::sqlx::ColumnIndex<R>,
         {
-            fn from_row(row: &'r R) -> Result<Self, premix_core::sqlx::Error> {
-                use premix_core::sqlx::Row;
+            fn from_row(row: &'r R) -> Result<Self, premix_orm::sqlx::Error> {
+                use premix_orm::sqlx::Row;
                 Ok(Self {
                     #(
                         #field_idents: row.try_get(#field_names)?,
@@ -440,19 +440,19 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             }
         }
 
-        #[premix_core::async_trait::async_trait]
-        impl<DB> premix_core::Model<DB> for #struct_name
+        #[premix_orm::async_trait::async_trait]
+        impl<DB> premix_orm::Model<DB> for #struct_name
         where
-            DB: premix_core::SqlDialect,
-            for<'c> &'c str: premix_core::sqlx::ColumnIndex<DB::Row>,
-            usize: premix_core::sqlx::ColumnIndex<DB::Row>,
-            for<'q> <DB as premix_core::sqlx::Database>::Arguments<'q>: premix_core::sqlx::IntoArguments<'q, DB>,
-            for<'c> &'c mut <DB as premix_core::sqlx::Database>::Connection: premix_core::sqlx::Executor<'c, Database = DB>,
-            i32: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB> + for<'r> premix_core::sqlx::Decode<'r, DB>,
-            i64: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB> + for<'r> premix_core::sqlx::Decode<'r, DB>,
-            String: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB> + for<'r> premix_core::sqlx::Decode<'r, DB>,
-            bool: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB> + for<'r> premix_core::sqlx::Decode<'r, DB>,
-            Option<String>: premix_core::sqlx::Type<DB> + for<'q> premix_core::sqlx::Encode<'q, DB> + for<'r> premix_core::sqlx::Decode<'r, DB>,
+            DB: premix_orm::SqlDialect,
+            for<'c> &'c str: premix_orm::sqlx::ColumnIndex<DB::Row>,
+            usize: premix_orm::sqlx::ColumnIndex<DB::Row>,
+            for<'q> <DB as premix_orm::sqlx::Database>::Arguments<'q>: premix_orm::sqlx::IntoArguments<'q, DB>,
+            for<'c> &'c mut <DB as premix_orm::sqlx::Database>::Connection: premix_orm::sqlx::Executor<'c, Database = DB>,
+            i32: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB> + for<'r> premix_orm::sqlx::Decode<'r, DB>,
+            i64: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB> + for<'r> premix_orm::sqlx::Decode<'r, DB>,
+            String: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB> + for<'r> premix_orm::sqlx::Decode<'r, DB>,
+            bool: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB> + for<'r> premix_orm::sqlx::Decode<'r, DB>,
+            Option<String>: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB> + for<'r> premix_orm::sqlx::Decode<'r, DB>,
             #( #related_model_bounds, )*
         {
             fn table_name() -> &'static str {
@@ -460,19 +460,19 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             }
 
             fn create_table_sql() -> String {
-                let mut cols = vec!["id ".to_string() + <DB as premix_core::SqlDialect>::auto_increment_pk()];
+                let mut cols = vec!["id ".to_string() + <DB as premix_orm::SqlDialect>::auto_increment_pk()];
                 #(
                     if #field_names != "id" {
                         let field_name: &str = #field_names;
                         let sql_type = if field_name.ends_with("_id") {
-                            <DB as premix_core::SqlDialect>::int_type()
+                            <DB as premix_orm::SqlDialect>::int_type()
                         } else {
                             match field_name {
-                                "name" | "title" | "status" | "email" | "role" => <DB as premix_core::SqlDialect>::text_type(),
-                                "age" | "version" | "price" | "balance" => <DB as premix_core::SqlDialect>::int_type(),
-                                "is_active" => <DB as premix_core::SqlDialect>::bool_type(),
-                                "deleted_at" => <DB as premix_core::SqlDialect>::text_type(),
-                                _ => <DB as premix_core::SqlDialect>::text_type(),
+                                "name" | "title" | "status" | "email" | "role" => <DB as premix_orm::SqlDialect>::text_type(),
+                                "age" | "version" | "price" | "balance" => <DB as premix_orm::SqlDialect>::int_type(),
+                                "is_active" => <DB as premix_orm::SqlDialect>::bool_type(),
+                                "deleted_at" => <DB as premix_orm::SqlDialect>::text_type(),
+                                _ => <DB as premix_orm::SqlDialect>::text_type(),
                             }
                         };
                         cols.push(format!("{} {}", #field_names, sql_type));
@@ -485,12 +485,12 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 vec![ #( #field_names.to_string() ),* ]
             }
 
-            async fn save<'a, E>(&mut self, executor: E) -> Result<(), premix_core::sqlx::Error>
+            async fn save<'a, E>(&mut self, executor: E) -> Result<(), premix_orm::sqlx::Error>
             where
-                E: premix_core::IntoExecutor<'a, DB = DB>
+                E: premix_orm::IntoExecutor<'a, DB = DB>
             {
                 let mut executor = executor.into_executor();
-                use premix_core::ModelHooks;
+                use premix_orm::ModelHooks;
                 self.before_save().await?;
 
                 // Filter out 'id' and 'version' for INSERT
@@ -503,13 +503,13 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     .collect();
 
                 let placeholders = (1..=columns.len())
-                    .map(|i| <DB as premix_core::SqlDialect>::placeholder(i))
+                    .map(|i| <DB as premix_orm::SqlDialect>::placeholder(i))
                     .collect::<Vec<_>>()
                     .join(", ");
 
                 let sql = format!("INSERT INTO {} ({}) VALUES ({})", #table_name, columns.join(", "), placeholders);
 
-                let mut query = premix_core::sqlx::query::<DB>(&sql);
+                let mut query = premix_orm::sqlx::query::<DB>(&sql);
 
                 // Bind only non-id/version fields
                 #(
@@ -525,7 +525,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 let result = executor.execute(query).await?;
 
                 // Sync the ID from Database
-                let last_id = <DB as premix_core::SqlDialect>::last_insert_id(&result);
+                let last_id = <DB as premix_orm::SqlDialect>::last_insert_id(&result);
                 if last_id > 0 {
                      self.id = last_id as i32;
                 }
@@ -537,25 +537,25 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             #update_impl
             #delete_impl
 
-            async fn find_by_id<'a, E>(executor: E, id: i32) -> Result<Option<Self>, premix_core::sqlx::Error>
+            async fn find_by_id<'a, E>(executor: E, id: i32) -> Result<Option<Self>, premix_orm::sqlx::Error>
             where
-                E: premix_core::IntoExecutor<'a, DB = DB>
+                E: premix_orm::IntoExecutor<'a, DB = DB>
             {
                 let mut executor = executor.into_executor();
-                let p = <DB as premix_core::SqlDialect>::placeholder(1);
+                let p = <DB as premix_orm::SqlDialect>::placeholder(1);
                 let mut where_clause = format!("WHERE id = {}", p);
                 if Self::has_soft_delete() {
                     where_clause.push_str(" AND deleted_at IS NULL");
                 }
                 let sql = format!("SELECT * FROM {} {} LIMIT 1", #table_name, where_clause);
-                let query = premix_core::sqlx::query_as::<DB, Self>(&sql).bind(id);
+                let query = premix_orm::sqlx::query_as::<DB, Self>(&sql).bind(id);
 
                 executor.fetch_optional(query).await
             }
 
-            async fn eager_load<'a, E>(models: &mut [Self], relation: &str, executor: E) -> Result<(), premix_core::sqlx::Error>
+            async fn eager_load<'a, E>(models: &mut [Self], relation: &str, executor: E) -> Result<(), premix_orm::sqlx::Error>
             where
-                E: premix_core::IntoExecutor<'a, DB = DB>
+                E: premix_orm::IntoExecutor<'a, DB = DB>
             {
                 let mut executor = executor.into_executor();
                 #eager_load_body
@@ -582,8 +582,7 @@ fn is_ignored(field: &Field) -> bool {
 fn has_premix_flag(attrs: &[Attribute], flag: &str) -> bool {
     for attr in attrs {
         if attr.path().is_ident("premix") {
-            let args =
-                attr.parse_args_with(Punctuated::<Ident, Token![,]>::parse_terminated);
+            let args = attr.parse_args_with(Punctuated::<Ident, Token![,]>::parse_terminated);
             if let Ok(args) = args {
                 if args.iter().any(|ident| ident == flag) {
                     return true;

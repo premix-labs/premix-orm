@@ -20,6 +20,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # Premix
 premix-core = { path = "../premix-core" }
 premix-macros = { path = "../premix-macros" }
+premix-orm = { path = "../premix-orm" }
 
 # Competitors
 sea-orm = { version = "1.1.19", features = [

@@ -1,6 +1,6 @@
 [package]
 name = "premix-cli"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2024"
 description = "Command-line tool for Premix ORM (Migration management and more)."
 license = "MIT"
@@ -12,7 +12,7 @@ categories = ["database", "development-tools::cargo-plugins"]
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
 tokio = { version = "1.49.0", features = ["full"] }
-premix-core = { version = "1.0.4", path = "../premix-core", default-features = false }
+premix-core = { version = "1.0.5", path = "../premix-core", default-features = false }
 sqlx = { version = "0.8.6", features = ["runtime-tokio"] }
 syn = { version = "2.0.114", features = ["full"] }
 quote = "1.0.43"

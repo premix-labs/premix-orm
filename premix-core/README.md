@@ -18,7 +18,7 @@ Most users should depend on `premix-orm` instead. Use `premix-core` directly onl
 
 ```toml
 [dependencies]
-premix-core = "1.0.4"
+premix-core = "1.0.5"
 ```
 
 ## Quick Start
@@ -53,3 +53,4 @@ async fn example() -> Result<(), sqlx::Error> {
 ## License
 
 This project is licensed under the [MIT license](LICENSE).
+
