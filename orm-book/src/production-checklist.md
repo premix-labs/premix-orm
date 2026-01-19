@@ -1,5 +1,8 @@
 # Production Checklist
 
+> Note: Premix is an alpha research project. This checklist is guidance only and
+> does not imply production readiness.
+
 Use this list to sanity check a deployment.
 
 ## Schema and Migrations

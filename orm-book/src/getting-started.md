@@ -7,7 +7,7 @@ definition, connection, schema sync, and a simple query.
 
 ```toml
 [dependencies]
-premix-orm = "1.0.5"
+premix-orm = "1.0.5-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 Enable the database features you need on both `premix-orm` and `sqlx`:
 
 ```toml
-premix-orm = { version = "1.0.5", features = ["postgres"] }
+premix-orm = { version = "1.0.5-alpha", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 

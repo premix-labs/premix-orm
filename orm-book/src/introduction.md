@@ -19,7 +19,7 @@ runtime to stay as close to raw `sqlx` calls as possible.
 - Querying, filtering, and eager-loading relations.
 - Schema management: `Premix::sync` and CLI migrations.
 - Transactions, validation, and hooks.
-- Multi-database setup and production readiness.
+- Multi-database setup and production considerations.
 
 ## What This Book Does Not Cover
 
