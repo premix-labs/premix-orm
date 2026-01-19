@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Macros:** `#[derive(Model)]` now emits `premix-orm` paths; direct macro users must depend on `premix-orm`.
 - **Benchmarks:** Standardized Criterion config (warmup/measurement/sample size) across SQLite and Postgres benches.
 - **Docs:** Updated benchmark methodology/results and recorded multi-round median summaries.
+- **Docs:** Updated flowplan to the Ultimate Edition and aligned README/Philosophy checklist.
 
 ## [1.0.4] - 2026-01-18
 

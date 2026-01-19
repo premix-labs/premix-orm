@@ -14,7 +14,7 @@
 
 Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need for manual migration files. It combines the ease of use of Active Record with the raw performance of handcrafted SQL.
 
-> Research status: This project is a research prototype. APIs may change and production use is not recommended yet. See [DISCLAIMER.md](DISCLAIMER.md).
+> Status: Alpha / Pre-release (v0.x). APIs may change and production use is not recommended yet. See [DISCLAIMER.md](DISCLAIMER.md).
 
 ## Why People Try Premix
 
@@ -45,31 +45,31 @@ See `docs/DEVELOPMENT.md` for the engineering flowplan and `docs/PHILOSOPHY_CHEC
 - **Auto-Sync Schema:** Premix syncs your Rust structs directly to the database for rapid prototyping. No manual SQL required.
 - **Zero Overhead:** Uses Rust Macros to generate SQL at compile-time. No runtime reflection.
 - **Application-Level Joins:** Solves the N+1 problem using smart `WHERE IN` clauses instead of complex SQL JOINs, making scaling easier.
-- **Multi-Database:** Write once, run on **SQLite**, **PostgreSQL**, or **MySQL** (Coming Soon).
+- **Multi-Database:** Write once, run on **SQLite**, **PostgreSQL**, or **MySQL** (feature-gated).
 
 ---
 
-## Benchmarks (Phase 6 Results)
+## Benchmarks (Latest Results)
 
 We don't just say we're fast; we prove it.
 
 TL;DR: Premix is near raw `sqlx` for inserts/selects and dramatically faster
 than loop-based bulk updates in this benchmark suite.
 
-Highlights (from `docs/BENCHMARK_RESULTS.md`):
+Highlights (median of medians across 3 rounds; see `docs/BENCHMARK_RESULTS.md`):
 
-- Insert (1 row): Premix **15.1 us** vs raw SQLx 22.8 us
-- Select (1 row): Premix **12.3 us** vs raw SQLx 12.2 us (~same)
-- Bulk Update (1,000 rows): Premix **66.5 us** vs loop 32.6 ms (~490x faster)
-- Postgres SELECT: Premix **61.5 us** vs raw SQL 65.2 us (faster)
+- Insert (1 row): Premix **25.9 us** vs raw SQLx **25.9 us** (~same)
+- Select (1 row): Premix **25.4 us** vs raw SQLx **25.2 us** (~same)
+- Bulk Update (1,000 rows): Premix **62.9 us** vs loop **27.2 ms** (~432x faster)
+- Postgres SELECT: Premix **56.6 us** vs raw SQL **53.1 us** (~same)
 
 Full results: `docs/BENCHMARK_RESULTS.md`
 
-| Operation | Premix | SeaORM | Rbatis | SQLx (Raw) | Verdict |
-|-----------|--------|--------|--------|------------|---------|
-| **Insert** | **127 us** | 129 us | 152 us | 273 us | **2.1x Faster** |
-| **Select** | **62.3 us** | 70 us | 70.8 us | 63.4 us | **Fastest** |
-| **Bulk Update (1k)** | **52.9 us** | - | - | 15.2 ms* | **287x Faster** |
+| Operation | Premix | SeaORM | Rbatis | SQLx (Raw) |
+|-----------|--------|--------|--------|------------|
+| **Insert** | **25.9 us** | 39.4 us | 30.6 us | **25.9 us** |
+| **Select** | 25.4 us | 42.9 us | 33.7 us | **25.2 us** |
+| **Bulk Update (1k)** | **62.9 us** | - | - | 27.2 ms* |
 
 *> Compared to standard loop-based updates.*
 
@@ -77,10 +77,10 @@ Full results: `docs/BENCHMARK_RESULTS.md`
 
 ## Implementation Roadmap
 
-- [x] **Phase 1-5: The Foundation** (CRUD, Relations, Transactions, Validation)
-- [x] **Phase 6: The Versatility** (Multi-DB, Soft Deletes, Bulk Ops) **Stable**
-- [x] **Phase 7: DevOps** (Versioned Migrations) **Stable**
-- [ ] **Phase 8: Scalability** (Read/Write Splitting)
+- [x] **Phase 1-3: Foundation** (CRUD, Relations, Migrations)
+- [x] **Phase 4-7: Production Baseline** (CLI, Docs, DevOps, Multi-DB)
+- [ ] **Phase 4-6 Additions** (Test utilities, scaffolding, integrations, guards, masking)
+- [ ] **Phase 8: Scalability** (Read/Write splitting, metrics)
 - [ ] **Phase 9: Advanced Relations** (Polymorphic) (Deferred)
 - [ ] **Phase 10: Legacy Support** (Composite Keys)
 

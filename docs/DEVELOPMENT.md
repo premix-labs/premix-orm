@@ -1,46 +1,36 @@
-# Master Flowplan: Premix ORM
+# Master Flowplan: Premix ORM (Ultimate Edition)
 
 ## Project Concept
 **Concept:** The "Holy Grail" of Rust ORMs.  
 **Slogan:** "Write Rust, run optimized SQL."  
-**Status:** Research prototype; production use is not recommended yet.
+**Status:** Alpha / Pre-release (v0.x).
 
 ## 1. Core Philosophy (5 Pillars of a Great ORM)
 
 ### 1. The "Zero-Overhead" Abstraction (Fastest)
 > "Your code should be as fast as handwriting raw SQL."
-- **Premix Approach:** Uses Rust macros to generate SQL builders. SQL strings are assembled at runtime and executed via `sqlx`.
-- **Goal:** Runtime benchmarks should match raw `sqlx` (0% overhead).
-- **Current status:** Performance is close to raw SQL in benchmarks, but SQL strings are still built at runtime.
+- **Premix Approach:** Compile-time SQL generation. Runtime executes pre-baked SQL via `sqlx`.
+- **Optimization:** Smart configuration defaults to auto-tune connection pools based on environment (Server vs Serverless).
 
 ### 2. The "Mental Model Match" (Easiest)
 > "Code should look like the way you think, not the way the database stores."
-- **Premix Approach:** Connects the object world (`User`) with the table world (`users`).
-  - **Naming Convention:** `User` -> `users` automatically.
-  - **Active Record:** `user.save()`, `User::find(1)`.
-  - **Auto Migration:** Change a struct, update the database.
+- **Premix Approach:** Seamless object-table mapping.
+- **Goal:** Intuitive Active Record API and frictionless testing experience.
 
 ### 3. The "Impossible-to-Fail" Safety (Most Stable)
 > "If it compiles, it runs without SQL errors."
-- **Premix Approach:** Move errors to compile time.
-  - Wrong field name -> compile error.
-  - Type mismatch -> compile error.
-- **Goal:** Eliminate runtime surprises.
-- **Current status:** Model fields are validated at compile time, but string-based filters can still fail at runtime.
+- **Premix Approach:** Compile-time validation.
+- **Safety Rails:** Destructive guards prevent accidental mass deletes without explicit confirmation.
 
 ### 4. The "Glass Box" Transparency (Transparent)
 > "Magic is good, but Black Magic is bad."
-- **Premix Approach:** Expose generated SQL via `to_sql()` or similar helpers.
-- **Goal:** Developers should feel in control of the SQL.
-- **Current status:** Query builder exposes `to_sql()`, `to_update_sql()`, and `to_delete_sql()`.
+- **Premix Approach:** Expose generated SQL via `to_sql()`.
+- **Security:** Sensitive data masking in logs (`***`) for PII protection.
 
 ### 5. The "Graceful Escape Hatch" (Flexible)
 > "Easy things should be easy, hard things should be possible."
-- **Premix Approach:** Allow mixing raw SQL with the ORM for complex cases.
-- **Example:** `User::raw_sql("SELECT * FROM ...").fetch_all()`
-- **Current status:** `Model::raw_sql(...)` is available for raw queries mapped to models.
-
-See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
+- **Premix Approach:** Mix raw SQL smoothly.
+- **Feature:** Arbitrary struct mapping for complex reporting queries.
 
 ---
 
@@ -48,160 +38,88 @@ See `docs/PHILOSOPHY_CHECKLIST.md` for a full status checklist.
 
 ### Phase 0: Setup and Architecture - ✅ COMPLETED
 **Mission:** Lay the foundation for a scalable project structure.
-
-- [x] Project initialization (Cargo workspace).
-- [x] Module separation (premix-core runtime, premix-macros compiler).
+- [x] Project initialization & module separation.
 - [x] Basic `#[derive(Model)]` macro.
-- [x] Table name generation (`User` -> `users`).
-- [x] Column extraction from struct fields.
-
-**Tech Stack:**
-- Database driver: `sqlx`
-- Macro engine: `syn`, `quote`, `proc-macro2`
-- Runtime: `tokio`
 
 ### Phase 1: The CRUD Engine - ✅ COMPLETED
 **Mission:** Basic persistence and querying.
-
-- [x] Type mapping system (`i32` -> `INTEGER`, `String` -> `TEXT`).
-- [x] Connection integration with `sqlx`.
-
-**Milestone 1:** `User::new().save().await` persists data to a real database.
+- [x] Type mapping system.
+- [x] Connection integration.
 
 ### Phase 2: The Migration Magic - ✅ COMPLETED
 **Mission:** Avoid manual SQL for schema changes.
-
-- [x] Schema introspection.
-- [x] Diff engine between structs and database.
-- [x] `Premix::sync()` capability to run `CREATE TABLE` or `ALTER TABLE`.
-
-**Milestone 2:** Add a field to a struct, run sync, and the database updates.
+- [x] Schema introspection & diff engine.
+- [x] `Premix::sync()` capability.
 
 ### Phase 3: Relations and Optimization - ✅ COMPLETED
 **Mission:** Solve N+1 and provide fluent queries.
+- [x] Relation macros (`has_many`, `belongs_to`).
+- [x] Eager loading (`.include()`) with O(1) query strategy.
 
-- [x] Relation macros: `#[has_many]`, `#[belongs_to]`.
-- [x] Query builder: `Model::find()`, `.filter()`, `.limit()`, `.offset()`.
-- [x] Eager loading with `.include("posts")`.
-- [x] `#[premix(ignore)]` for non-column fields.
-
-**Milestone 3:** Fetch 100 users and posts without N+1 queries.
-
-### Phase 4: Developer Experience - ✅ COMPLETED
-**Mission:** Make the ORM usable in real projects.
-
+### Phase 4: Developer Experience (DX) - 🔄 UPDATED
+**Mission:** Make the ORM usable, testable, and adoptable.
 - [x] CLI tool (`premix-cli`).
 - [x] Documentation and examples.
-- [x] Macro error handling with `syn::Error`.
+- [x] Macro error handling.
+- [ ] Test Utilities (New):
+  - [ ] Transactional tests (auto-rollback after each test case).
+  - [ ] MockDatabase helper.
+- [ ] Database Scaffolding (New):
+  - [ ] `premix-cli scaffold`: Generate Rust structs from an existing database.
+- [ ] Framework Integrations (New):
+  - [ ] Official helpers: `premix-axum`, `premix-actix`.
 
-**Milestone 4:** Full ecosystem for both runtime and DX.
+### Phase 5: Enterprise Standard - 🔄 UPDATED
+**Mission:** Support real-world complexity, security, and reporting.
+- [x] Observability (`tracing`).
+- [x] ACID transactions & lifecycle hooks.
+- [x] Optimistic locking & validation.
+- [ ] Arbitrary Struct Mapping (New):
+  - [ ] `Premix::raw("...").fetch_as::<ReportStruct>()`.
+- [ ] Sensitive Data Masking (New):
+  - [ ] `#[premix(sensitive)]` attribute to redact data in logs.
+- [ ] Smart Configuration (New):
+  - [ ] Auto-tune pool settings based on environment detection.
 
-### Phase 5: Enterprise Standard - ✅ COMPLETED
-**Mission:** Support real-world complexity.
-
-- [x] Observability via `tracing`.
-- [x] ACID transactions with `pool.begin()`.
-- [x] Lifecycle hooks (`before_save`, `after_save`).
-- [x] Optimistic locking via `update()`.
-- [x] Validation via `validate()`.
-
-**Milestone 5:** Ready for large-scale systems.
-
-### Phase 6: The Versatility - ✅ COMPLETED
-**Mission:** Remove limitations and support multiple databases.
-
-- [x] Multi-database architecture via `SqlDialect`.
-- [x] Generic `Model<DB>` and `QueryBuilder<DB>`.
-- [x] SQLite, PostgreSQL, MySQL support (feature-gated).
-- [x] Soft deletes (`deleted_at`).
-- [x] Bulk operations (`QueryBuilder::update`, `QueryBuilder::delete`).
-- [x] JSON/JSONB support via `serde_json`.
-
-**Milestone 6:** Multi-DB support and bulk ops in place.
+### Phase 6: The Versatility - 🔄 UPDATED
+**Mission:** Remove limitations and ensure safety.
+- [x] Multi-database architecture (SQLite, Postgres, MySQL).
+- [x] Soft deletes.
+- [x] Bulk operations (`update_all`, `delete_all`).
+- [ ] Destructive Guards (New):
+  - [ ] Prevent `delete_all()` without `.filter()` or `.allow_unsafe()`.
 
 ### Phase 7: DevOps (Versioned Migrations) - ✅ COMPLETED
-**Mission:** Support team workflows and release readiness.
-
+**Mission:** Support team workflows and release readiness. Target: v1.0.0 RC.
 - [x] `premix-cli migrate` command family.
-- [x] `create`, `up` migrations.
-- [x] Migration tracking via `_premix_migrations`.
-
-**Milestone 7:** Production migration system ready.
+- [x] Versioned migration files (`YYYYMMDD_name.sql`).
 
 ### Phase 8: The Scale - 📝 PLANNED
-**Mission:** High availability for large systems.
-
+**Mission:** High availability and observability. Target: v1.1.0.
 - [ ] Read/write splitting (primary + replicas).
 - [ ] Connection resolver for multi-tenancy.
+- [ ] Metrics collection (New):
+  - [ ] Pool stats (idle/active) and query latency for Prometheus/Grafana.
 
 ### Phase 9: Advanced Relations - ⏳ DEFERRED
-**Mission:** Support advanced/niche modeling.
-
+**Mission:** Support advanced modeling.
 - [ ] Polymorphic relations.
-- [ ] Declarative schema definitions.
 
 ### Phase 10: Legacy Support - 📝 PLANNED
 **Mission:** Support brownfield projects.
-
 - [ ] Composite primary keys.
-- [ ] Custom Postgres types and domains.
-
-### Optional: Futurism - 📝 PLANNED
-**Mission:** Prepare for long-term trends.
-
-- [ ] Vector types and semantic search.
-- [ ] Edge/Wasm targets.
-- [ ] Local-first sync (CRDTs).
-- [ ] Adaptive self-optimization.
+- [ ] Custom Postgres types.
 
 ---
 
 ## 3. Developer Automation Suite
-
-Scripts live under `scripts/`:
-
-### `scripts/dev` (Daily Development)
-- `run_fmt.ps1`: Format code and fix clippy warnings.
-- `run_clean.ps1`: Clean build artifacts and database files.
-- `gen_docs.ps1`: Generate rustdoc and mdBook.
-
-### `scripts/test` (Verification)
-- `test_quick.ps1`: Smoke test (build + run basic app).
-- `test_examples.ps1`: Run all example apps.
-- `test_migration.ps1`: E2E test for migrations.
-
-### `scripts/ci` (Quality Assurance)
-- `check_all.ps1`: Build, test, clippy, format.
-- `check_audit.ps1`: Security scan via cargo audit.
-- `check_coverage.ps1`: Code coverage via cargo tarpaulin.
-
-### `scripts/bench` (Performance)
-- `bench_orm.ps1`: SQLite benchmark vs other ORMs.
-- `bench_io.ps1`: Postgres I/O benchmark.
-
-### `scripts/release` (Deployment)
-- `run_publish.ps1`: Publish to crates.io.
+Standard scripts under `scripts/`: `dev`, `test`, `ci`, `bench`, `release`.
 
 ---
 
-## 4. Architecture Diagram (Mental Model)
-
-### Working Flow
-1. **Compile time:** User writes Rust -> macros generate optimized SQL.
-2. **Runtime:** App executes generated SQL through `sqlx`.
-
----
-
-## 5. Engineering Risks
-
-### 1. Compile Time Explosion
-- **Risk:** Heavy macros slow builds.
-- **Solution:** Keep codegen lean and support incremental compilation.
-
-### 2. Error Message Complexity
-- **Risk:** Macro errors point to the wrong place.
-- **Solution:** Use `syn::spanned` to target errors precisely.
-
-### 3. Async in Traits
-- **Risk:** Rust limitations around async trait bounds.
-- **Solution:** Carefully design ownership, use BoxFutures when needed.
+## 4. Engineering Risks
+- **Compile Time:** Mitigate with lean codegen.
+- **Error Messages:** Mitigate with `syn::spanned`.
+- **Async Traits:** Mitigate with `BoxFutures`.
+- **Accidental Data Loss:** Mitigate with destructive guards.
+- **Log Leakage:** Mitigate with sensitive data masking.
