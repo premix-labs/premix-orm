@@ -12,9 +12,14 @@ categories = ["database", "development-tools::cargo-plugins"]
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
 tokio = { version = "1.49.0", features = ["full"] }
-premix-core = { version = "1.0.4", path = "../premix-core" }
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
+premix-core = { version = "1.0.4", path = "../premix-core", default-features = false }
+sqlx = { version = "0.8.6", features = ["runtime-tokio"] }
 syn = { version = "2.0.114", features = ["full"] }
 quote = "1.0.43"
 walkdir = "2.5.0"
 chrono = "0.4"
+
+[features]
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite", "premix-core/sqlite"]
+postgres = ["sqlx/postgres", "premix-core/postgres"]

@@ -2,7 +2,9 @@ pub use async_trait;
 pub use sqlx;
 
 pub mod prelude {
-    pub use crate::{Executor, IntoExecutor, Model, Premix, UpdateResult};
+    pub use crate::{
+        Executor, IntoExecutor, Model, ModelHooks, ModelValidation, Premix, UpdateResult,
+    };
 }
 use sqlx::{Database, Executor as SqlxExecutor, IntoArguments};
 
@@ -209,8 +211,6 @@ pub trait ModelHooks {
     }
 }
 
-#[async_trait::async_trait]
-impl<T: Send + Sync> ModelHooks for T {}
 
 // Chapter 9: Optimistic Locking
 #[derive(Debug, PartialEq)]
@@ -234,7 +234,6 @@ pub trait ModelValidation {
     }
 }
 
-impl<T> ModelValidation for T {}
 
 #[async_trait::async_trait]
 pub trait Model<DB: Database>: Sized + Send + Sync + Unpin
@@ -608,6 +607,16 @@ mod tests {
         deleted_at: Option<String>,
     }
 
+    #[async_trait::async_trait]
+    impl ModelHooks for SoftDeleteModel {}
+
+    impl ModelValidation for SoftDeleteModel {}
+
+    struct HookDummy;
+
+    #[async_trait::async_trait]
+    impl ModelHooks for HookDummy {}
+
     #[derive(Debug)]
     struct HardDeleteModel {
         id: i32,
@@ -637,6 +646,7 @@ mod tests {
 
     #[cfg(feature = "postgres")]
     #[derive(Debug, sqlx::FromRow)]
+    #[allow(dead_code)]
     struct PgModel {
         id: i32,
         name: String,
@@ -1666,7 +1676,6 @@ mod tests {
 
     #[tokio::test]
     async fn model_hooks_defaults_are_noops() {
-        struct HookDummy;
         let mut dummy = HookDummy;
         dummy.before_save().await.unwrap();
         dummy.after_save().await.unwrap();
@@ -1674,7 +1683,6 @@ mod tests {
 
     #[tokio::test]
     async fn model_hooks_default_impls_cover_trait_body() {
-        struct HookDummy;
         let mut dummy = HookDummy;
         ModelHooks::before_save(&mut dummy).await.unwrap();
         ModelHooks::after_save(&mut dummy).await.unwrap();

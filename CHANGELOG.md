@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-01-19
+
+### Added
+- **Migrations:** Implemented `migrate down` with rollback support for SQLite and Postgres.
+- **CLI Sync:** `premix sync` now runs a `src/bin/premix-sync.rs` helper when present.
+- **Hooks/Validation:** Added opt-in custom hooks/validation via `#[premix(custom_hooks, custom_validation)]`.
+- **Docs:** Book now documents CLI sync and migrate down, plus updated hooks/validation guidance.
+- **Docs:** Added a dedicated `orm-book/book-examples` compile-check crate and validation notes.
+
+### Changed
+- **CLI:** Added database selection for `premix migrate down`.
+- **CLI:** Feature-gated Postgres support and updated compatibility notes.
+- **Tests:** Expanded CLI and migrator tests to cover rollback flows.
+
 ## [1.0.4] - 2026-01-18
 
 ### Added

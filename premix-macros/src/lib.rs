@@ -1,6 +1,9 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Field, Fields, parse_macro_input};
+use syn::{
+    Attribute, Data, DeriveInput, Field, Fields, Ident, Token, parse_macro_input,
+    punctuated::Punctuated,
+};
 
 mod relations;
 
@@ -89,6 +92,33 @@ mod tests {
         };
         let tokens = generate_generic_impl(&input).unwrap().to_string();
         assert!(!tokens.contains("version = version + 1"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_default_hooks_and_validation() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("ModelHooks"));
+        assert!(tokens.contains("ModelValidation"));
+    }
+
+    #[test]
+    fn generate_generic_impl_skips_custom_hooks_and_validation() {
+        let input: DeriveInput = parse_quote! {
+            #[premix(custom_hooks, custom_validation)]
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(!tokens.contains("impl premix_core :: ModelHooks"));
+        assert!(!tokens.contains("impl premix_core :: ModelValidation"));
     }
 
     #[test]
@@ -209,6 +239,8 @@ mod tests {
 fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_name = &input.ident;
     let table_name = struct_name.to_string().to_lowercase() + "s";
+    let custom_hooks = has_premix_flag(&input.attrs, "custom_hooks");
+    let custom_validation = has_premix_flag(&input.attrs, "custom_validation");
 
     let all_fields = if let Data::Struct(data) = &input.data {
         if let Fields::Named(fields) = &data.fields {
@@ -367,6 +399,23 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         }
     }
 
+    let hooks_impl = if custom_hooks {
+        quote! {}
+    } else {
+        quote! {
+            #[premix_core::async_trait::async_trait]
+            impl premix_core::ModelHooks for #struct_name {}
+        }
+    };
+
+    let validation_impl = if custom_validation {
+        quote! {}
+    } else {
+        quote! {
+            impl premix_core::ModelValidation for #struct_name {}
+        }
+    };
+
     // Generic Implementation
     Ok(quote! {
         impl<'r, R> premix_core::sqlx::FromRow<'r, R> for #struct_name
@@ -512,6 +561,9 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 #eager_load_body
             }
         }
+
+        #hooks_impl
+        #validation_impl
     })
 }
 
@@ -522,6 +574,21 @@ fn is_ignored(field: &Field) -> bool {
             && meta == "ignore"
         {
             return true;
+        }
+    }
+    false
+}
+
+fn has_premix_flag(attrs: &[Attribute], flag: &str) -> bool {
+    for attr in attrs {
+        if attr.path().is_ident("premix") {
+            let args =
+                attr.parse_args_with(Punctuated::<Ident, Token![,]>::parse_terminated);
+            if let Ok(args) = args {
+                if args.iter().any(|ident| ident == flag) {
+                    return true;
+                }
+            }
         }
     }
     false

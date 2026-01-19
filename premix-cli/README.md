@@ -65,12 +65,16 @@ Synchronize your Rust `#[derive(Model)]` structs with the database schema implic
 ```bash
 premix sync
 ```
-*Note: For robustness, we recommend using `Premix::sync(&pool)` in your application code on startup.*
+The CLI looks for `src/bin/premix-sync.rs` and runs it. Use that binary to
+call `Premix::sync` for the models you want to create.
+
+*Note: For robustness, we still recommend calling `Premix::sync(&pool)` in your
+application code on startup.*
 
 ## Compatibility
 
-- `migrate up` currently supports SQLite only (MVP)
-- Postgres/MySQL support planned via `sqlx`
+- SQLite is enabled by default.
+- Postgres requires `--features postgres` when building.
 
 ## Configuration
 

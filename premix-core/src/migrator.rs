@@ -78,6 +78,52 @@ impl Migrator<sqlx::Sqlite> {
         tx.commit().await?;
         Ok(())
     }
+
+    pub async fn rollback_last(
+        &self,
+        migrations: Vec<Migration>,
+    ) -> Result<bool, Box<dyn Error>> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS _premix_migrations (
+                version TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let last: Option<AppliedMigration> = sqlx::query_as::<_, AppliedMigration>(
+            "SELECT version FROM _premix_migrations ORDER BY version DESC LIMIT 1",
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let Some(last) = last else {
+            tx.commit().await?;
+            return Ok(false);
+        };
+
+        let migration = migrations
+            .into_iter()
+            .find(|m| m.version == last.version)
+            .ok_or_else(|| format!("Migration {} not found.", last.version))?;
+
+        if migration.down_sql.trim().is_empty() {
+            return Err("Down migration is empty.".into());
+        }
+
+        tx.execute(migration.down_sql.as_str()).await?;
+        sqlx::query("DELETE FROM _premix_migrations WHERE version = ?")
+            .bind(&migration.version)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(true)
+    }
 }
 
 #[cfg(feature = "postgres")]
@@ -134,6 +180,52 @@ impl Migrator<sqlx::Postgres> {
 
         tx.commit().await?;
         Ok(())
+    }
+
+    pub async fn rollback_last(
+        &self,
+        migrations: Vec<Migration>,
+    ) -> Result<bool, Box<dyn Error>> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS _premix_migrations (
+                version TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let last: Option<AppliedMigration> = sqlx::query_as::<_, AppliedMigration>(
+            "SELECT version FROM _premix_migrations ORDER BY version DESC LIMIT 1",
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let Some(last) = last else {
+            tx.commit().await?;
+            return Ok(false);
+        };
+
+        let migration = migrations
+            .into_iter()
+            .find(|m| m.version == last.version)
+            .ok_or_else(|| format!("Migration {} not found.", last.version))?;
+
+        if migration.down_sql.trim().is_empty() {
+            return Err("Down migration is empty.".into());
+        }
+
+        tx.execute(migration.down_sql.as_str()).await?;
+        sqlx::query("DELETE FROM _premix_migrations WHERE version = $1")
+            .bind(&migration.version)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(true)
     }
 }
 
@@ -224,6 +316,41 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn sqlite_migrator_rolls_back_last() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        let migrator = Migrator::new(pool.clone());
+
+        let migrations = vec![
+            Migration {
+                version: "20260103000000".to_string(),
+                name: "create_a".to_string(),
+                up_sql: "CREATE TABLE a (id INTEGER PRIMARY KEY);".to_string(),
+                down_sql: "DROP TABLE a;".to_string(),
+            },
+            Migration {
+                version: "20260104000000".to_string(),
+                name: "create_b".to_string(),
+                up_sql: "CREATE TABLE b (id INTEGER PRIMARY KEY);".to_string(),
+                down_sql: "DROP TABLE b;".to_string(),
+            },
+        ];
+
+        migrator.run(migrations.clone()).await.unwrap();
+        let rolled_back = migrator.rollback_last(migrations).await.unwrap();
+        assert!(rolled_back);
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
@@ -346,6 +473,60 @@ mod tests {
         }
 
         let _ = sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_name))
+            .execute(&pool)
+            .await;
+    }
+
+    #[cfg(feature = "postgres")]
+    #[tokio::test]
+    async fn postgres_migrator_rolls_back_last() {
+        let Some(pool) = pg_pool_or_skip().await else {
+            return;
+        };
+        let migrator = Migrator::new(pool.clone());
+
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let version_a = format!("20260103{:020}", suffix);
+        let version_b = format!("20260104{:020}", suffix);
+        let table_a = format!("premix_mig_a_{}", suffix);
+        let table_b = format!("premix_mig_b_{}", suffix);
+        let migrations = vec![
+            Migration {
+                version: version_a.clone(),
+                name: "create_a".to_string(),
+                up_sql: format!("CREATE TABLE {} (id SERIAL PRIMARY KEY);", table_a),
+                down_sql: format!("DROP TABLE {};", table_a),
+            },
+            Migration {
+                version: version_b.clone(),
+                name: "create_b".to_string(),
+                up_sql: format!("CREATE TABLE {} (id SERIAL PRIMARY KEY);", table_b),
+                down_sql: format!("DROP TABLE {};", table_b),
+            },
+        ];
+
+        migrator.run(migrations.clone()).await.unwrap();
+        let rolled_back = migrator.rollback_last(migrations).await.unwrap();
+        assert!(rolled_back);
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(count >= 1);
+
+        let _ = sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_a))
+            .execute(&pool)
+            .await;
+        let _ = sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_b))
+            .execute(&pool)
+            .await;
+        let _ = sqlx::query("DELETE FROM _premix_migrations WHERE version = $1 OR version = $2")
+            .bind(&version_a)
+            .bind(&version_b)
             .execute(&pool)
             .await;
     }

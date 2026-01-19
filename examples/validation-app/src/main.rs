@@ -1,12 +1,46 @@
-use premix_core::ModelValidation;
+use premix_core::{ModelValidation, ValidationError};
 use premix_macros::Model;
 
 #[derive(Model, Debug, Clone)]
+#[premix(custom_validation)]
 struct User {
     id: i32,
     email: String,
     name: String,
     age: i32,
+}
+
+impl ModelValidation for User {
+    fn validate(&self) -> Result<(), Vec<ValidationError>> {
+        let mut errors = Vec::new();
+
+        if !self.email.contains('@') {
+            errors.push(ValidationError {
+                field: "email".to_string(),
+                message: "email must contain '@'".to_string(),
+            });
+        }
+
+        if self.name.trim().len() < 3 {
+            errors.push(ValidationError {
+                field: "name".to_string(),
+                message: "name must be at least 3 characters".to_string(),
+            });
+        }
+
+        if self.age < 0 {
+            errors.push(ValidationError {
+                field: "age".to_string(),
+                message: "age must be >= 0".to_string(),
+            });
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
 }
 
 #[tokio::main]
@@ -31,18 +65,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Invalid user (demonstration - actual validation rules will be added via attributes)
+    // Invalid user
     let invalid_user = User {
         id: 2,
-        email: "not-an-email".to_string(), // Would fail email validation
-        name: "A".to_string(),             // Would fail min_len=3
-        age: -5,                           // Would fail min=0
+        email: "not-an-email".to_string(),
+        name: "A".to_string(),
+        age: -5,
     };
 
     match invalid_user.validate() {
-        Ok(_) => {
-            println!("\n[OK] User passed validation (rules not yet implemented via attributes)")
-        }
+        Ok(_) => println!("\n[OK] User passed validation"),
         Err(errors) => {
             println!("\n[FAIL] Validation errors:");
             for e in errors {
@@ -52,10 +84,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\n[DONE] Validation Demo Complete!");
-    println!("\nNote: Add validation rules using attributes like:");
-    println!("  #[premix(email)]");
-    println!("  #[premix(min_len = 3, max_len = 50)]");
-    println!("  #[premix(min = 0, max = 150)]");
 
     Ok(())
 }

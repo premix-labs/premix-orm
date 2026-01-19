@@ -7,3 +7,6 @@ src = "src"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "light"
+
+[rust]
+edition = "2021"

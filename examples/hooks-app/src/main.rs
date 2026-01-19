@@ -1,8 +1,9 @@
-use premix_core::{Model, Premix};
+use premix_core::{Model, ModelHooks, Premix};
 use premix_macros::Model;
 use sqlx::sqlite::SqlitePool;
 
 #[derive(Model, Debug)]
+#[premix(custom_hooks)]
 struct User {
     id: i32,
     name: String,
@@ -10,7 +11,8 @@ struct User {
 }
 
 // Override Hooks!
-impl User {
+#[premix_core::async_trait::async_trait]
+impl ModelHooks for User {
     async fn before_save(&mut self) -> Result<(), sqlx::Error> {
         println!("🎣 [before_save] Hook triggered for: {}", self.name);
         if self.role == "admin" {

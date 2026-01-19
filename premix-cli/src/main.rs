@@ -1,9 +1,12 @@
-use std::{fs, io::Write, path::Path, str::FromStr};
+use std::{fs, io::Write, path::Path, process::Command, str::FromStr};
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use premix_core::{Migration, Migrator};
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
+#[cfg(feature = "postgres")]
+use sqlx::postgres::PgPoolOptions;
+#[cfg(feature = "sqlite")]
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use walkdir::WalkDir;
 
 #[derive(Parser)]
@@ -43,7 +46,10 @@ enum MigrateAction {
         database: Option<String>,
     },
     /// Revert the last migration
-    Down,
+    Down {
+        #[arg(short, long)]
+        database: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -62,9 +68,12 @@ async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             println!(">> Scanning for models...");
             let db_url = resolve_db_url(database);
             println!(">> Connecting to {}...", db_url);
-            println!(
-                "[WARN] CLI Sync is under construction. Please use Premix::sync::<Model>(&pool) in code."
-            );
+            match run_sync(&db_url)? {
+                true => println!("[OK] Sync completed via premix-sync binary."),
+                false => println!(
+                    "[WARN] No premix-sync binary found. Create src/bin/premix-sync.rs to enable CLI sync."
+                ),
+            }
         }
         Commands::Migrate { action } => match action {
             MigrateAction::Create { name } => {
@@ -84,8 +93,16 @@ async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 
                 println!("[OK] Migrations up to date.");
             }
-            MigrateAction::Down => {
-                println!("Start Reverting... (Not implemented yet)");
+            MigrateAction::Down { database } => {
+                let db_url = resolve_db_url(database);
+                println!(">> Connecting to {}...", db_url);
+
+                if !run_migrations_down(&db_url, Path::new("migrations")).await? {
+                    println!("[INFO] No migrations to roll back.");
+                    return Ok(());
+                }
+
+                println!("[OK] Last migration reverted.");
             }
         },
     }
@@ -129,19 +146,78 @@ async fn run_migrations_up(
     db_url: &str,
     migrations_dir: &Path,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    // For MVP: Support SQLite only in CLI initially
-    let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
-    let pool = SqlitePool::connect_with(options).await?;
-
     let migrations_dir = migrations_dir.to_string_lossy();
     let migrations = load_migrations(&migrations_dir)?;
     if migrations.is_empty() {
         return Ok(false);
     }
 
-    let migrator = Migrator::new(pool);
-    migrator.run(migrations).await?;
-    Ok(true)
+    if db_url.starts_with("postgres://") || db_url.starts_with("postgresql://") {
+        #[cfg(feature = "postgres")]
+        {
+            let pool = PgPoolOptions::new().connect(db_url).await?;
+            let migrator = Migrator::new(pool);
+            migrator.run(migrations).await?;
+            return Ok(true);
+        }
+
+        #[cfg(not(feature = "postgres"))]
+        {
+            return Err("Postgres support is not enabled. Rebuild premix-cli with --features postgres.".into());
+        }
+    }
+
+    #[cfg(feature = "sqlite")]
+    {
+        let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
+        let pool = SqlitePool::connect_with(options).await?;
+        let migrator = Migrator::new(pool);
+        migrator.run(migrations).await?;
+        return Ok(true);
+    }
+
+    #[cfg(not(feature = "sqlite"))]
+    {
+        Err("SQLite support is not enabled. Rebuild premix-cli with --features sqlite.".into())
+    }
+}
+
+async fn run_migrations_down(
+    db_url: &str,
+    migrations_dir: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let migrations_dir = migrations_dir.to_string_lossy();
+    let migrations = load_migrations(&migrations_dir)?;
+    if migrations.is_empty() {
+        return Ok(false);
+    }
+
+    if db_url.starts_with("postgres://") || db_url.starts_with("postgresql://") {
+        #[cfg(feature = "postgres")]
+        {
+            let pool = PgPoolOptions::new().connect(db_url).await?;
+            let migrator = Migrator::new(pool);
+            return migrator.rollback_last(migrations).await;
+        }
+
+        #[cfg(not(feature = "postgres"))]
+        {
+            return Err("Postgres support is not enabled. Rebuild premix-cli with --features postgres.".into());
+        }
+    }
+
+    #[cfg(feature = "sqlite")]
+    {
+        let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
+        let pool = SqlitePool::connect_with(options).await?;
+        let migrator = Migrator::new(pool);
+        return migrator.rollback_last(migrations).await;
+    }
+
+    #[cfg(not(feature = "sqlite"))]
+    {
+        Err("SQLite support is not enabled. Rebuild premix-cli with --features sqlite.".into())
+    }
 }
 
 fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Error>> {
@@ -203,6 +279,24 @@ fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Err
     Ok(migrations)
 }
 
+fn run_sync(db_url: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let sync_entry = Path::new("src/bin/premix-sync.rs");
+    if !sync_entry.exists() {
+        return Ok(false);
+    }
+
+    let status = Command::new("cargo")
+        .args(["run", "--quiet", "--bin", "premix-sync"])
+        .env("DATABASE_URL", db_url)
+        .status()?;
+
+    if !status.success() {
+        return Err("premix-sync failed. Check the binary output.".into());
+    }
+
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -212,6 +306,7 @@ mod tests {
     };
 
     use super::*;
+    use sqlx::SqlitePool;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
     static CWD_LOCK: Mutex<()> = Mutex::new(());
@@ -385,6 +480,46 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    #[tokio::test]
+    async fn run_migrations_down_returns_false_when_empty() {
+        let root = make_temp_dir();
+        let dir = root.join("migrations");
+        fs::create_dir_all(&dir).unwrap();
+
+        let db_url = sqlite_test_url(&root);
+        let ran = run_migrations_down(&db_url, &dir).await.unwrap();
+        assert!(!ran);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn run_migrations_down_reverts_last() {
+        let root = make_temp_dir();
+        let dir = root.join("migrations");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("20260109000000_create_items.sql");
+        fs::write(
+            &file,
+            "-- up\nCREATE TABLE items (id INTEGER PRIMARY KEY);\n-- down\nDROP TABLE items;\n",
+        )
+        .unwrap();
+
+        let db_url = sqlite_test_url(&root);
+        run_migrations_up(&db_url, &dir).await.unwrap();
+        let rolled_back = run_migrations_down(&db_url, &dir).await.unwrap();
+        assert!(rolled_back);
+
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _premix_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn cli_parses_init() {
         let cli = Cli::try_parse_from(["premix", "init"]).unwrap();
@@ -449,7 +584,9 @@ mod tests {
         let cli = Cli::try_parse_from(["premix", "migrate", "down"]).unwrap();
         match cli.command {
             Commands::Migrate { action } => match action {
-                MigrateAction::Down => {}
+                MigrateAction::Down { database } => {
+                    assert!(database.is_none());
+                }
                 _ => panic!("expected migrate down"),
             },
             _ => panic!("expected migrate command"),
@@ -538,7 +675,7 @@ mod tests {
     async fn cli_run_migrate_down_ok() {
         run_cli(Cli {
             command: Commands::Migrate {
-                action: MigrateAction::Down,
+                action: MigrateAction::Down { database: None },
             },
         })
         .await
