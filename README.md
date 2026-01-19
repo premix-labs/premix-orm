@@ -14,7 +14,8 @@
 
 Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need for manual migration files. It combines the ease of use of Active Record with the raw performance of handcrafted SQL.
 
-> Status: Alpha / Pre-release (v0.x). APIs may change and production use is not recommended yet. See [DISCLAIMER.md](DISCLAIMER.md).
+> Status: Alpha / Pre-release. APIs may change and production use is not recommended yet. See [DISCLAIMER.md](DISCLAIMER.md).
+> Note: Versions 1.0.0–1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
 
 ## Why People Try Premix
 

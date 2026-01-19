@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.5-alpha] - 2026-01-19
 
+> Note: Versions 1.0.0–1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
+
 ### Added
 - **Migrations:** Implemented `migrate down` with rollback support for SQLite and Postgres.
 - **CLI Sync:** `premix sync` now runs a `src/bin/premix-sync.rs` helper when present.
