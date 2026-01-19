@@ -275,7 +275,7 @@ serde = { version = "1", features = ["derive"] }
 
 - **Feature flags**: enable database features on both `premix-orm` and `sqlx`.
 - **`DATABASE_URL`**: CLI uses it by default; pass `--database` if needed.
-- **`migrate down`**: not implemented yet (use SQL down scripts manually).
+- **`migrate down`**: requires a valid `-- down` section in your migration file.
 
 ## Compatibility
 
