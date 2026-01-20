@@ -79,3 +79,9 @@ rustc-ice-*.txt
 coverage/
 build_rs_cov.profraw
 orm-book/book/
+
+# ===================
+# Benchmarks
+# ===================
+benchmarks/results/*
+!benchmarks/results/summary.csv
