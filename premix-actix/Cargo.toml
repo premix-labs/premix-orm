@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 description = "Actix-web helpers for Premix ORM."
 license = "MIT"
+repository = "https://github.com/premix-labs/premix-orm"
 
 [dependencies]
 actix-web = "4"
-premix-orm = { path = "../premix-orm" }
+premix-orm = { version = "1.0.6-alpha", path = "../premix-orm" }
 sqlx = { version = "0.8", default-features = false }
