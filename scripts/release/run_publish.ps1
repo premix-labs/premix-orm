@@ -49,6 +49,15 @@ try {
 
     Write-Host "   [premix-cli]..." -ForegroundColor Gray
     cargo publish -p premix-cli --dry-run
+
+    Write-Host "   [premix-axum]..." -ForegroundColor Gray
+    cargo publish -p premix-axum --dry-run
+
+    Write-Host "   [premix-actix]..." -ForegroundColor Gray
+    cargo publish -p premix-actix --dry-run
+
+    Write-Host "   [premix-metrics]..." -ForegroundColor Gray
+    cargo publish -p premix-metrics --dry-run
     Write-Success "Dry run completed successfully."
 
     # 3. Confirmation
@@ -89,6 +98,9 @@ try {
     Write-Host "   https://crates.io/crates/premix-macros"
     Write-Host "   https://crates.io/crates/premix-orm"
     Write-Host "   https://crates.io/crates/premix-cli"
+    Write-Host "   https://crates.io/crates/premix-axum"
+    Write-Host "   https://crates.io/crates/premix-actix"
+    Write-Host "   https://crates.io/crates/premix-metrics"
 }
 catch {
     Write-Host "`n[FAILED] $_" -ForegroundColor Red
