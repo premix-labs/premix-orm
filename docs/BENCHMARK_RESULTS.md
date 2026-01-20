@@ -1,6 +1,6 @@
 # Premix ORM Benchmark Results
 
-**Date:** 2026-01-19 (Latest Run)  
+**Date:** 2026-01-21 (Latest Run)  
 **Environment:** Windows 11, Rust 2024 Edition  
 **Test:** In-Memory SQLite + Real Postgres
 
@@ -10,9 +10,9 @@
 
 | Operation | SQLx Raw | Premix ORM | SeaORM | Rbatis |
 |-----------|----------|------------|--------|--------|
-| **Insert (1 row)** | **25.9 us** | **25.9 us** | 39.4 us | 30.6 us |
-| **Select (1 row)** | **25.2 us** | 25.4 us | 42.9 us | 33.7 us |
-| **Bulk Select (100)** | **84.7 us** | 101.1 us | 105.2 us | 107.0 us |
+| **Insert (1 row)** | **11.74 us** | 12.34 us | 26.97 us | 14.99 us |
+| **Select (1 row)** | 11.25 us | **11.16 us** | 19.83 us | 14.49 us |
+| **Bulk Select (100)** | **70.56 us** | 94.04 us | 97.42 us | 96.23 us |
 
 > **Premix vs The World:**
 > - **Single Row:** Premix is faster than SeaORM/Rbatis and within ~1% of raw SQL.
@@ -25,20 +25,20 @@
 ### Case A: Single Relation (1 User -> 10 Posts)
 | Method | Strategy | Time | Verdict |
 |--------|----------|------|---------|
-| **Raw SQL JOIN** | `JOIN` | **33.6 us** | Baseline |
-| **Premix (Relation)** | Lazy | **56.8 us** | +69% |
-| **Premix (Eager)** | Batch | **57.5 us** | +71% |
-| **SeaORM** | Relation | **47.3 us** | +41% |
-| **Rbatis** | Manual | **78.1 us** | +133% |
+| **Raw SQL JOIN** | `JOIN` | **24.48 us** | Baseline |
+| **Premix (Relation)** | Lazy | 33.20 us | +36% |
+| **Premix (Eager)** | Batch | 34.36 us | +40% |
+| **SeaORM** | Relation | 37.47 us | +53% |
+| **Rbatis** | Manual | 41.27 us | +69% |
 
 ### Case B: Bulk Relation (50 Users -> 500 Posts)
 | Method | Strategy | Time | vs Raw |
 |--------|----------|------|--------|
-| **Raw SQL JOIN** | `JOIN` | **557.6 us** | Baseline |
-| **Rbatis** | Manual Batch | **585.5 us** | +5% |
-| **Premix (Eager)** | Batching | **682.9 us** | +22% |
-| **SeaORM** | Loader | **858.0 us** | +54% |
-| **Lazy Loading** | N+1 | **1.9 ms** | +241% |
+| **Raw SQL JOIN** | `JOIN` | **526.94 us** | Baseline |
+| **Rbatis** | Manual Batch | 541.43 us | +3% |
+| **Premix (Eager)** | Batching | 630.17 us | +20% |
+| **SeaORM** | Loader | 845.48 us | +60% |
+| **Lazy Loading** | N+1 | 1.51 ms | +187% |
 
 ---
 
@@ -46,8 +46,8 @@
 
 | Operation | SQLx Raw | Premix | Rbatis | SeaORM |
 |-----------|----------|--------|--------|--------|
-| **Update** | **52.1 us** | 53.1 us | 60.5 us | 165.3 us |
-| **Delete (Hard)** | 55.8 us | **53.0 us** | 61.1 us | 79.6 us |
+| **Update** | **23.73 us** | 25.36 us | 27.95 us | 110.34 us |
+| **Delete (Hard)** | **22.96 us** | 24.30 us | 27.59 us | 54.91 us |
 
 > Premix's update is ~3.1x faster than SeaORM.
 
@@ -57,7 +57,7 @@
 
 | Library | Raw SQL (UPDATE) | Premix (.delete()) |
 |---------|------------------|--------------------|
-| **Time** | **53.2 us** | 53.5 us |
+| **Time** | **24.37 us** | 24.81 us |
 
 ---
 
@@ -65,10 +65,10 @@
 
 | Library | Time | vs Raw |
 |---------|------|--------|
-| **Raw SQLx** | **46.7 us** | Baseline |
-| **Premix** | 47.0 us | +1% |
-| **Rbatis** | 58.6 us | +26% |
-| **SeaORM** | 68.0 us | +46% |
+| **Raw SQLx** | **14.83 us** | Baseline |
+| **Premix** | 14.90 us | +1% |
+| **Rbatis** | 20.39 us | +37% |
+| **SeaORM** | 33.63 us | +127% |
 
 ---
 
@@ -76,8 +76,8 @@
 
 | Library | Time | vs Raw |
 |---------|------|--------|
-| **Raw SQL** | **53.6 us** | Baseline |
-| **Premix** | 54.4 us | +1% |
+| **Raw SQL** | **24.74 us** | Baseline |
+| **Premix** | 26.32 us | +6% |
 
 ---
 
@@ -85,8 +85,8 @@
 
 | Method | Time | Speedup |
 |--------|------|---------|
-| Loop Update (1 by 1) | 27.2 ms | Baseline |
-| **Bulk Update** | **62.9 us** | **432x faster** |
+| Loop Update (1 by 1) | 13.38 ms | Baseline |
+| **Bulk Update** | **55.40 us** | **241x faster** |
 > Speedup is vs the loop update shown above (same app, same dataset).
 
 ---
@@ -98,24 +98,24 @@
 ### INSERT (Real Network Latency)
 | ORM | Time | vs Raw SQL |
 |-----|------|------------|
-| **Raw SQL** | **102.5 us** | Baseline |
-| Premix | 106.5 us | +4% |
-| SeaORM | 109.2 us | +7% |
-| Rbatis | 105.2 us | +3% |
+| **Raw SQL** | **102.79 us** | Baseline |
+| Premix | 106.41 us | +4% |
+| SeaORM | 107.86 us | +5% |
+| Rbatis | 99.54 us | -3% |
 
 ### SELECT (Real Network Latency)
 | ORM | Time | vs Raw SQL |
 |-----|------|------------|
-| **Raw SQL** | **53.1 us** | Baseline |
-| Premix | 56.6 us | +7% |
-| SeaORM | 61.9 us | +17% |
-| Rbatis | 57.1 us | +8% |
+| **Raw SQL** | **54.68 us** | Baseline |
+| Premix | 54.49 us | -0% |
+| SeaORM | 63.21 us | +16% |
+| Rbatis | 55.74 us | +2% |
 
 ### Concurrency (10 Parallel Selects)
 | Method | Time |
 |--------|------|
-| **Raw SQL** | **185.3 us** |
-| Premix | 188.4 us |
+| **Raw SQL** | **178.66 us** |
+| Premix | 179.37 us |
 
 > In this run, raw SQL leads select/concurrency while Premix remains close.
 
@@ -125,10 +125,10 @@
 
 | Metric | Premix vs SeaORM | Premix vs Rbatis | Premix vs Raw SQL |
 |--------|------------------|------------------|-------------------|
-| **Insert** | **1.5x faster** | **1.2x faster** | ~Same |
-| **Select** | **1.7x faster** | **1.3x faster** | ~Same |
-| **Update** | **3.1x faster** | **1.1x faster** | ~Same |
-| **Transaction** | **1.4x faster** | **1.2x faster** | ~Same |
+| **Insert** | **2.2x faster** | **1.2x faster** | ~Same |
+| **Select** | **1.8x faster** | **1.3x faster** | ~Same |
+| **Update** | **4.4x faster** | **1.1x faster** | ~Same |
+| **Transaction** | **2.3x faster** | **1.4x faster** | ~Same |
 
 ---
 
@@ -142,9 +142,9 @@
 - **Postgres pool size:** 20 connections (PgPoolOptions::max_connections).
 - **Dataset sizes:** See table titles (e.g., 1 row, 100 rows, 50 users -> 500 posts).
 - **Criterion samples:** IO Insert = 50, IO Select = 100, IO Concurrency = 20, Bulk Ops = 10 (others default).
-- **Value source:** Median of medians across 3 rounds, from `benchmarks/results/summary.csv` (Criterion `base/estimates.json`).
+- **Value source:** Median of medians across 3 rounds, from `benchmarks/results/summary.csv`.
 - **Commands:** `scripts/bench/bench_repeat.ps1 -Rounds 3`.
-- **Commit:** 012117dd573d72c8772a7cba17e9a862b34a0520
+- **Commit:** 71d26aad0e3ef4798296e2bb62113d677b320349
 - **Interpretation:** Numbers are specific to this environment; absolute rankings can change with hardware, DB config, and workload.
 
 ---
