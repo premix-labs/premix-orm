@@ -1,4 +1,7 @@
 $ErrorActionPreference = "Stop"
+param(
+    [switch]$AutoConfirm
+)
 $sw = [Diagnostics.Stopwatch]::StartNew()
 
 function Write-Header {
@@ -64,7 +67,7 @@ try {
     Write-Header "CONFIRM PUBLICATION"
     $version = (Select-String -Pattern 'version = "(.*)"' -Path premix-core/Cargo.toml | Select-Object -First 1 | ForEach-Object { $_.Matches.Groups[1].Value })
     $prompt = "Are you sure you want to publish v" + $version + "? (y/N)"
-    $confirm = Read-Host $prompt
+    $confirm = if ($AutoConfirm) { "y" } else { Read-Host $prompt }
     if ($confirm -ne "y") {
         Write-Host "Cancelled." -ForegroundColor Yellow
         exit 0
