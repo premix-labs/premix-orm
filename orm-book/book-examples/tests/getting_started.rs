@@ -8,14 +8,14 @@ struct User {
 
 #[tokio::test]
 async fn getting_started_flow() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 
     let mut user = User { id: 0, name: "Alice".to_string() };
     user.save(&pool).await?;
 
     let users = User::find_in_pool(&pool)
-        .filter("name = 'Alice'")
+        .filter_eq("name", "Alice")
         .all()
         .await?;
 

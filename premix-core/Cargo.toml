@@ -1,6 +1,6 @@
 [package]
 name = "premix-core"
-version = "1.0.5-alpha"
+version = "1.0.6-alpha"
 edition = "2024"
 description = "A Zero-Overhead, Type-Safe ORM for Rust that runs optimized SQL."
 license = "MIT"
@@ -13,6 +13,7 @@ default = ["sqlite"]
 sqlite = ["sqlx/sqlite"]
 postgres = ["sqlx/postgres"]
 mysql = ["sqlx/mysql"]
+metrics = ["dep:metrics"]
 
 [dependencies]
 sqlx = { version = "0.8.6", features = [
@@ -20,10 +21,10 @@ sqlx = { version = "0.8.6", features = [
     "macros",
 ], default-features = false }
 tracing = "0.1.44"
-async-trait = "0.1.89"
 serde = "1.0.228"
 serde_json = "1.0.149"
 chrono = { version = "0.4", features = ["serde"] }
+metrics = { version = "0.22", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

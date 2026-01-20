@@ -4,9 +4,10 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
+use premix_metrics::PrometheusHandle;
 use premix_orm::{Executor, Model, Premix};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Sqlite, SqlitePool};
+use sqlx::{Pool, Sqlite};
 use tracing::info;
 
 // 1. Define your Models
@@ -20,6 +21,7 @@ pub struct User {
 #[derive(Clone)]
 pub struct AppState {
     pub db: Pool<Sqlite>,
+    pub metrics: PrometheusHandle,
 }
 
 #[tokio::main]
@@ -27,9 +29,12 @@ async fn main() {
     // Initialize Tracing
     tracing_subscriber::fmt::init();
 
+    let metrics = premix_metrics::install_prometheus_recorder()
+        .expect("Failed to install Prometheus recorder");
+
     // 3. Connect to Database
     let db_url = "sqlite:premix_axum_demo.db?mode=rwc";
-    let pool = SqlitePool::connect(db_url)
+    let pool = Premix::smart_sqlite_pool(db_url)
         .await
         .expect("Failed to connect to DB");
 
@@ -46,10 +51,11 @@ async fn main() {
 
     info!("Premix ORM v1.0 schema synced!");
 
-    let state = AppState { db: pool };
+    let state = AppState { db: pool, metrics };
 
     // 5. Setup Router with Full CRUD
     let app = Router::new()
+        .route("/metrics", get(metrics_handler))
         .route("/users", get(list_users).post(create_user))
         .route(
             "/users/{id}",
@@ -82,12 +88,22 @@ struct UpdateUserDto {
 // --- Handlers ---
 
 // LIST: GET /users
-async fn list_users(State(state): State<AppState>) -> Result<Json<Vec<User>>, StatusCode> {
-    let users = User::find_in_pool(&state.db)
-        .all()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(users))
+#[allow(clippy::manual_async_fn)]
+fn list_users(
+    State(state): State<AppState>,
+) -> impl std::future::Future<Output = Result<Json<Vec<User>>, StatusCode>> + Send {
+    async move {
+        let users = User::find_in_pool(&state.db)
+            .all()
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(Json(users))
+    }
+}
+
+// METRICS: GET /metrics
+async fn metrics_handler(State(state): State<AppState>) -> String {
+    state.metrics.render()
 }
 
 // CREATE: POST /users

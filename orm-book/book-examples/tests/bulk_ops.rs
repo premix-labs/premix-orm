@@ -11,7 +11,7 @@ struct User {
 
 #[tokio::test]
 async fn bulk_ops_examples() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 
     let mut user = User {
@@ -23,13 +23,13 @@ async fn bulk_ops_examples() -> Result<(), Box<dyn std::error::Error>> {
     user.save(&pool).await?;
 
     let updated = User::find_in_pool(&pool)
-        .filter("age > 18")
+        .filter_gt("age", 18)
         .update(json!({ "status": "active" }))
         .await?;
     assert_eq!(updated, 1);
 
     let removed = User::find_in_pool(&pool)
-        .filter("status = 'active'")
+        .filter_eq("status", "active")
         .delete()
         .await?;
     assert_eq!(removed, 1);

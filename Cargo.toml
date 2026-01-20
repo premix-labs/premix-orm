@@ -18,6 +18,9 @@ members = [
     "premix-cli",
     "examples/premix-axum-tutorial",
     "premix-orm",
+    "premix-axum",
+    "premix-actix",
+    "premix-metrics",
 ]
 
 [workspace.lints.clippy]

@@ -1,16 +1,51 @@
-pub use async_trait;
 pub use sqlx;
+pub use tracing;
 
 pub mod prelude {
     pub use crate::{
-        Executor, IntoExecutor, Model, ModelHooks, ModelValidation, Premix, UpdateResult,
+        Executor, IntoExecutor, Model, ModelHooks, ModelSchema, ModelValidation, Premix,
+        RuntimeProfile, UpdateResult, test_utils::MockDatabase, test_utils::with_test_transaction,
     };
 }
 use sqlx::{Database, Executor as SqlxExecutor, IntoArguments};
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeProfile {
+    Server,
+    Serverless,
+}
 
 pub struct Premix;
+pub struct RawQuery<'q> {
+    sql: &'q str,
+}
+
+#[doc(hidden)]
+pub fn build_placeholders<DB: SqlDialect>(start_index: usize, count: usize) -> String {
+    let mut out = String::new();
+    for i in 0..count {
+        if i > 0 {
+            out.push_str(", ");
+        }
+        out.push_str(&DB::placeholder(start_index + i));
+    }
+    out
+}
 pub mod migrator;
+pub mod schema;
+pub mod test_utils;
 pub use migrator::{Migration, Migrator};
+pub use schema::{
+    ColumnDiff, ColumnNullabilityDiff, ColumnPrimaryKeyDiff, ColumnTypeDiff, ModelSchema,
+    SchemaColumn, SchemaDiff, SchemaForeignKey, SchemaIndex, SchemaTable,
+    format_schema_diff_summary,
+};
+#[cfg(feature = "postgres")]
+pub use schema::{diff_postgres_schema, introspect_postgres_schema, postgres_migration_sql};
+#[cfg(feature = "sqlite")]
+pub use schema::{diff_sqlite_schema, introspect_sqlite_schema, sqlite_migration_sql};
+pub use test_utils::{MockDatabase, with_test_transaction};
 
 // Chapter 18: Multi-Database Support
 // We define a trait that encapsulates all the requirements for a database to work with Premix.
@@ -22,12 +57,18 @@ where
     fn auto_increment_pk() -> &'static str;
     fn rows_affected(res: &Self::QueryResult) -> u64;
     fn last_insert_id(res: &Self::QueryResult) -> i64;
+    fn supports_returning() -> bool {
+        false
+    }
 
     fn current_timestamp_fn() -> &'static str {
         "CURRENT_TIMESTAMP"
     }
     fn int_type() -> &'static str {
         "INTEGER"
+    }
+    fn bigint_type() -> &'static str {
+        "BIGINT"
     }
     fn text_type() -> &'static str {
         "TEXT"
@@ -37,6 +78,9 @@ where
     }
     fn float_type() -> &'static str {
         "REAL"
+    }
+    fn blob_type() -> &'static str {
+        "BLOB"
     }
 }
 
@@ -48,11 +92,20 @@ impl SqlDialect for sqlx::Sqlite {
     fn auto_increment_pk() -> &'static str {
         "INTEGER PRIMARY KEY"
     }
+    fn bigint_type() -> &'static str {
+        "INTEGER"
+    }
+    fn blob_type() -> &'static str {
+        "BLOB"
+    }
     fn rows_affected(res: &sqlx::sqlite::SqliteQueryResult) -> u64 {
         res.rows_affected()
     }
     fn last_insert_id(res: &sqlx::sqlite::SqliteQueryResult) -> i64 {
         res.last_insert_rowid()
+    }
+    fn supports_returning() -> bool {
+        false
     }
 }
 
@@ -64,11 +117,32 @@ impl SqlDialect for sqlx::Postgres {
     fn auto_increment_pk() -> &'static str {
         "SERIAL PRIMARY KEY"
     }
+    fn int_type() -> &'static str {
+        "INTEGER"
+    }
+    fn bigint_type() -> &'static str {
+        "BIGINT"
+    }
+    fn text_type() -> &'static str {
+        "TEXT"
+    }
+    fn bool_type() -> &'static str {
+        "BOOLEAN"
+    }
+    fn float_type() -> &'static str {
+        "DOUBLE PRECISION"
+    }
+    fn blob_type() -> &'static str {
+        "BYTEA"
+    }
     fn rows_affected(res: &sqlx::postgres::PgQueryResult) -> u64 {
         res.rows_affected()
     }
     fn last_insert_id(_res: &sqlx::postgres::PgQueryResult) -> i64 {
         0
+    }
+    fn supports_returning() -> bool {
+        true
     }
 }
 
@@ -80,11 +154,20 @@ impl SqlDialect for sqlx::MySql {
     fn auto_increment_pk() -> &'static str {
         "INTEGER AUTO_INCREMENT PRIMARY KEY"
     }
+    fn bigint_type() -> &'static str {
+        "BIGINT"
+    }
+    fn blob_type() -> &'static str {
+        "LONGBLOB"
+    }
     fn rows_affected(res: &sqlx::mysql::MySqlQueryResult) -> u64 {
         res.rows_affected()
     }
     fn last_insert_id(res: &sqlx::mysql::MySqlQueryResult) -> i64 {
         res.last_insert_id() as i64
+    }
+    fn supports_returning() -> bool {
+        false
     }
 }
 
@@ -199,15 +282,14 @@ fn default_model_hook_result() -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-#[async_trait::async_trait]
 pub trait ModelHooks {
     #[inline(never)]
-    async fn before_save(&mut self) -> Result<(), sqlx::Error> {
-        default_model_hook_result()
+    fn before_save(&mut self) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send {
+        async move { default_model_hook_result() }
     }
     #[inline(never)]
-    async fn after_save(&mut self) -> Result<(), sqlx::Error> {
-        default_model_hook_result()
+    fn after_save(&mut self) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send {
+        async move { default_model_hook_result() }
     }
 }
 
@@ -233,7 +315,6 @@ pub trait ModelValidation {
     }
 }
 
-#[async_trait::async_trait]
 pub trait Model<DB: Database>: Sized + Send + Sync + Unpin
 where
     DB: SqlDialect,
@@ -244,22 +325,37 @@ where
     fn list_columns() -> Vec<String>;
 
     /// Saves the current instance to the database.
-    async fn save<'a, E>(&mut self, executor: E) -> Result<(), sqlx::Error>
+    fn save<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
     where
         E: IntoExecutor<'a, DB = DB>;
 
-    async fn update<'a, E>(&mut self, executor: E) -> Result<UpdateResult, sqlx::Error>
+    fn update<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl std::future::Future<Output = Result<UpdateResult, sqlx::Error>> + Send
     where
         E: IntoExecutor<'a, DB = DB>;
 
     // Chapter 16: Soft Delete support
-    async fn delete<'a, E>(&mut self, executor: E) -> Result<(), sqlx::Error>
+    fn delete<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
     where
         E: IntoExecutor<'a, DB = DB>;
     fn has_soft_delete() -> bool;
+    fn sensitive_fields() -> &'static [&'static str] {
+        &[]
+    }
 
     /// Finds a record by its Primary Key.
-    async fn find_by_id<'a, E>(executor: E, id: i32) -> Result<Option<Self>, sqlx::Error>
+    fn find_by_id<'a, E>(
+        executor: E,
+        id: i32,
+    ) -> impl std::future::Future<Output = Result<Option<Self>, sqlx::Error>> + Send
     where
         E: IntoExecutor<'a, DB = DB>;
 
@@ -271,15 +367,12 @@ where
     }
 
     #[inline(never)]
-    async fn eager_load<'a, E>(
+    fn eager_load<'a>(
         _models: &mut [Self],
         _relation: &str,
-        _executor: E,
-    ) -> Result<(), sqlx::Error>
-    where
-        E: IntoExecutor<'a, DB = DB>,
-    {
-        default_model_hook_result()
+        _executor: Executor<'a, DB>,
+    ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send {
+        async move { default_model_hook_result() }
     }
     fn find<'a, E>(executor: E) -> QueryBuilder<'a, Self, DB>
     where
@@ -298,13 +391,152 @@ where
     }
 }
 
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub enum BindValue {
+    String(String),
+    I64(i64),
+    F64(f64),
+    Bool(bool),
+    Null,
+}
+
+impl BindValue {
+    fn to_log_string(&self) -> String {
+        match self {
+            BindValue::String(v) => v.clone(),
+            BindValue::I64(v) => v.to_string(),
+            BindValue::F64(v) => v.to_string(),
+            BindValue::Bool(v) => v.to_string(),
+            BindValue::Null => "NULL".to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "metrics")]
+fn record_query_metrics(operation: &str, table: &str, elapsed: Duration) {
+    let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
+    let labels = [
+        ("operation", operation.to_string()),
+        ("table", table.to_string()),
+    ];
+    metrics::histogram!("premix.query.duration_ms", &labels).record(elapsed_ms);
+    metrics::counter!("premix.query.count", &labels).increment(1);
+}
+
+#[cfg(not(feature = "metrics"))]
+fn record_query_metrics(_operation: &str, _table: &str, _elapsed: Duration) {}
+
+impl From<String> for BindValue {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<&str> for BindValue {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+
+impl From<i32> for BindValue {
+    fn from(value: i32) -> Self {
+        Self::I64(value as i64)
+    }
+}
+
+impl From<i64> for BindValue {
+    fn from(value: i64) -> Self {
+        Self::I64(value)
+    }
+}
+
+impl From<f64> for BindValue {
+    fn from(value: f64) -> Self {
+        Self::F64(value)
+    }
+}
+
+impl From<bool> for BindValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<Option<String>> for BindValue {
+    fn from(value: Option<String>) -> Self {
+        match value {
+            Some(v) => Self::String(v),
+            None => Self::Null,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum FilterExpr {
+    Raw(String),
+    Compare {
+        column: String,
+        op: String,
+        values: Vec<BindValue>,
+    },
+    NullCheck {
+        column: String,
+        is_null: bool,
+    },
+}
+
+fn bind_value_query<'q, DB>(
+    query: sqlx::query::Query<'q, DB, <DB as Database>::Arguments<'q>>,
+    value: BindValue,
+) -> sqlx::query::Query<'q, DB, <DB as Database>::Arguments<'q>>
+where
+    DB: Database,
+    String: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    f64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    bool: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    Option<String>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+{
+    match value {
+        BindValue::String(v) => query.bind(v),
+        BindValue::I64(v) => query.bind(v),
+        BindValue::F64(v) => query.bind(v),
+        BindValue::Bool(v) => query.bind(v),
+        BindValue::Null => query.bind(Option::<String>::None),
+    }
+}
+
+fn bind_value_query_as<'q, DB, T>(
+    query: sqlx::query::QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
+    value: BindValue,
+) -> sqlx::query::QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
+where
+    DB: Database,
+    String: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    f64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    bool: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    Option<String>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+{
+    match value {
+        BindValue::String(v) => query.bind(v),
+        BindValue::I64(v) => query.bind(v),
+        BindValue::F64(v) => query.bind(v),
+        BindValue::Bool(v) => query.bind(v),
+        BindValue::Null => query.bind(Option::<String>::None),
+    }
+}
+
 pub struct QueryBuilder<'a, T, DB: Database> {
     executor: Executor<'a, DB>,
-    filters: Vec<String>,
+    filters: Vec<FilterExpr>,
     limit: Option<i32>,
     offset: Option<i32>,
     includes: Vec<String>,
     include_deleted: bool, // Chapter 16
+    allow_unsafe: bool,
+    has_raw_filter: bool,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -321,15 +553,170 @@ where
             offset: None,
             includes: Vec::new(),
             include_deleted: false,
+            allow_unsafe: false,
+            has_raw_filter: false,
             _marker: std::marker::PhantomData,
         }
     }
 
     pub fn filter(mut self, condition: impl Into<String>) -> Self {
-        self.filters.push(condition.into());
+        self.filters.push(FilterExpr::Raw(condition.into()));
+        self.has_raw_filter = true;
         self
     }
 
+    pub fn filter_raw(self, condition: impl Into<String>) -> Self {
+        self.filter(condition)
+    }
+
+    pub fn filter_eq(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: "=".to_string(),
+            values: vec![value.into()],
+        });
+        self
+    }
+
+    pub fn filter_ne(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: "!=".to_string(),
+            values: vec![value.into()],
+        });
+        self
+    }
+
+    pub fn filter_lt(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: "<".to_string(),
+            values: vec![value.into()],
+        });
+        self
+    }
+
+    pub fn filter_lte(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: "<=".to_string(),
+            values: vec![value.into()],
+        });
+        self
+    }
+
+    pub fn filter_gt(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: ">".to_string(),
+            values: vec![value.into()],
+        });
+        self
+    }
+
+    pub fn filter_gte(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: ">=".to_string(),
+            values: vec![value.into()],
+        });
+        self
+    }
+
+    pub fn filter_like(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: "LIKE".to_string(),
+            values: vec![value.into()],
+        });
+        self
+    }
+
+    pub fn filter_is_null(mut self, column: &str) -> Self {
+        self.filters.push(FilterExpr::NullCheck {
+            column: column.to_string(),
+            is_null: true,
+        });
+        self
+    }
+
+    pub fn filter_is_not_null(mut self, column: &str) -> Self {
+        self.filters.push(FilterExpr::NullCheck {
+            column: column.to_string(),
+            is_null: false,
+        });
+        self
+    }
+
+    pub fn filter_in<I, V>(mut self, column: &str, values: I) -> Self
+    where
+        I: IntoIterator<Item = V>,
+        V: Into<BindValue>,
+    {
+        let values = values.into_iter().map(Into::into).collect();
+        self.filters.push(FilterExpr::Compare {
+            column: column.to_string(),
+            op: "IN".to_string(),
+            values,
+        });
+        self
+    }
+
+    fn format_filters_for_log(&self) -> String {
+        let sensitive_fields = T::sensitive_fields();
+        let mut clauses = Vec::new();
+
+        for filter in &self.filters {
+            match filter {
+                FilterExpr::Raw(_) => {
+                    clauses.push("RAW(<redacted>)".to_string());
+                }
+                FilterExpr::Compare { column, op, values } => {
+                    let is_sensitive = sensitive_fields.iter().any(|&f| f == column);
+                    if op == "IN" {
+                        if values.is_empty() {
+                            clauses.push("1=0".to_string());
+                            continue;
+                        }
+                        let rendered = values
+                            .iter()
+                            .map(|value| {
+                                if is_sensitive {
+                                    "***".to_string()
+                                } else {
+                                    value.to_log_string()
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        clauses.push(format!("{} IN ({})", column, rendered));
+                    } else {
+                        let rendered = if is_sensitive {
+                            "***".to_string()
+                        } else if let Some(value) = values.first() {
+                            value.to_log_string()
+                        } else {
+                            "NULL".to_string()
+                        };
+                        clauses.push(format!("{} {} {}", column, op, rendered));
+                    }
+                }
+                FilterExpr::NullCheck { column, is_null } => {
+                    if *is_null {
+                        clauses.push(format!("{} IS NULL", column));
+                    } else {
+                        clauses.push(format!("{} IS NOT NULL", column));
+                    }
+                }
+            }
+        }
+
+        if T::has_soft_delete() && !self.include_deleted {
+            clauses.push("deleted_at IS NULL".to_string());
+        }
+
+        clauses.join(" AND ")
+    }
     pub fn limit(mut self, limit: i32) -> Self {
         self.limit = Some(limit);
         self
@@ -351,13 +738,15 @@ where
         self
     }
 
+    pub fn allow_unsafe(mut self) -> Self {
+        self.allow_unsafe = true;
+        self
+    }
+
     /// Returns the SELECT SQL that would be executed for this query.
     pub fn to_sql(&self) -> String {
-        let mut sql = format!(
-            "SELECT * FROM {}{}",
-            T::table_name(),
-            self.build_where_clause()
-        );
+        let (where_clause, _) = self.render_where_clause(1);
+        let mut sql = format!("SELECT * FROM {}{}", T::table_name(), where_clause);
 
         if let Some(limit) = self.limit {
             sql.push_str(&format!(" LIMIT {}", limit));
@@ -387,44 +776,82 @@ where
             .collect::<Vec<_>>()
             .join(", ");
 
+        let (where_clause, _) = self.render_where_clause(obj.len() + 1);
         Ok(format!(
             "UPDATE {} SET {}{}",
             T::table_name(),
             set_clause,
-            self.build_where_clause()
+            where_clause
         ))
     }
 
     /// Returns the DELETE (or soft delete) SQL that would be executed for this query.
     pub fn to_delete_sql(&self) -> String {
+        let (where_clause, _) = self.render_where_clause(1);
         if T::has_soft_delete() {
             format!(
                 "UPDATE {} SET deleted_at = {}{}",
                 T::table_name(),
                 DB::current_timestamp_fn(),
-                self.build_where_clause()
+                where_clause
             )
         } else {
-            format!(
-                "DELETE FROM {}{}",
-                T::table_name(),
-                self.build_where_clause()
-            )
+            format!("DELETE FROM {}{}", T::table_name(), where_clause)
         }
     }
 
-    fn build_where_clause(&self) -> String {
-        let mut filters = self.filters.clone();
+    fn render_where_clause(&self, start_index: usize) -> (String, Vec<BindValue>) {
+        let mut clauses = Vec::new();
+        let mut binds = Vec::new();
+        let mut idx = start_index;
 
-        // Chapter 16: Handle Soft Delete filtering
-        if T::has_soft_delete() && !self.include_deleted {
-            filters.push("deleted_at IS NULL".to_string());
+        for filter in &self.filters {
+            match filter {
+                FilterExpr::Raw(condition) => {
+                    clauses.push(condition.clone());
+                }
+                FilterExpr::Compare { column, op, values } => {
+                    if op == "IN" {
+                        if values.is_empty() {
+                            clauses.push("1=0".to_string());
+                            continue;
+                        }
+                        let placeholders = values
+                            .iter()
+                            .map(|_| {
+                                let p = DB::placeholder(idx);
+                                idx += 1;
+                                p
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        clauses.push(format!("{} IN ({})", column, placeholders));
+                        binds.extend(values.iter().cloned());
+                    } else {
+                        let placeholder = DB::placeholder(idx);
+                        idx += 1;
+                        clauses.push(format!("{} {} {}", column, op, placeholder));
+                        binds.extend(values.iter().cloned());
+                    }
+                }
+                FilterExpr::NullCheck { column, is_null } => {
+                    if *is_null {
+                        clauses.push(format!("{} IS NULL", column));
+                    } else {
+                        clauses.push(format!("{} IS NOT NULL", column));
+                    }
+                }
+            }
         }
 
-        if filters.is_empty() {
-            "".to_string()
+        if T::has_soft_delete() && !self.include_deleted {
+            clauses.push("deleted_at IS NULL".to_string());
+        }
+
+        if clauses.is_empty() {
+            ("".to_string(), binds)
         } else {
-            format!(" WHERE {}", filters.join(" AND "))
+            (format!(" WHERE {}", clauses.join(" AND ")), binds)
         }
     }
 }
@@ -438,13 +865,25 @@ where
     for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
     DB::Connection: Send,
     T: Send,
+    String: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    i64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    f64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
+    fn ensure_safe_filters(&self) -> Result<(), sqlx::Error> {
+        if self.has_raw_filter && !self.allow_unsafe {
+            return Err(sqlx::Error::Protocol(
+                "Refusing raw filter without allow_unsafe".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn all(mut self) -> Result<Vec<T>, sqlx::Error> {
-        let mut sql = format!(
-            "SELECT * FROM {}{}",
-            T::table_name(),
-            self.build_where_clause()
-        );
+        self.ensure_safe_filters()?;
+        let (where_clause, where_binds) = self.render_where_clause(1);
+        let mut sql = format!("SELECT * FROM {}{}", T::table_name(), where_clause);
 
         if let Some(limit) = self.limit {
             sql.push_str(&format!(" LIMIT {}", limit));
@@ -454,10 +893,30 @@ where
             sql.push_str(&format!(" OFFSET {}", offset));
         }
 
+        tracing::debug!(
+            operation = "select",
+            sql = %sql,
+            filters = %self.format_filters_for_log(),
+            "premix query"
+        );
+        let start = Instant::now();
         let mut results: Vec<T> = match &mut self.executor {
-            Executor::Pool(pool) => sqlx::query_as::<DB, T>(&sql).fetch_all(*pool).await?,
-            Executor::Conn(conn) => sqlx::query_as::<DB, T>(&sql).fetch_all(&mut **conn).await?,
+            Executor::Pool(pool) => {
+                let mut query = sqlx::query_as::<DB, T>(&sql);
+                for bind in where_binds {
+                    query = bind_value_query_as(query, bind);
+                }
+                query.fetch_all(*pool).await?
+            }
+            Executor::Conn(conn) => {
+                let mut query = sqlx::query_as::<DB, T>(&sql);
+                for bind in where_binds {
+                    query = bind_value_query_as(query, bind);
+                }
+                query.fetch_all(&mut **conn).await?
+            }
         };
+        record_query_metrics("select", T::table_name(), start.elapsed());
 
         for relation in self.includes {
             match &mut self.executor {
@@ -483,7 +942,8 @@ where
         bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
         Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     {
-        if self.filters.is_empty() {
+        self.ensure_safe_filters()?;
+        if self.filters.is_empty() && !self.allow_unsafe {
             return Err(sqlx::Error::Protocol(
                 "Refusing bulk update without filters".to_string(),
             ));
@@ -503,13 +963,20 @@ where
             .collect::<Vec<_>>()
             .join(", ");
 
+        let (where_clause, where_binds) = self.render_where_clause(obj.len() + 1);
         let sql = format!(
             "UPDATE {} SET {}{}",
             T::table_name(),
             set_clause,
-            self.build_where_clause()
+            where_clause
         );
 
+        tracing::debug!(
+            operation = "bulk_update",
+            sql = %sql,
+            filters = %self.format_filters_for_log(),
+            "premix query"
+        );
         let mut query = sqlx::query::<DB>(&sql);
         for val in obj.values() {
             match val {
@@ -530,8 +997,12 @@ where
                 }
             }
         }
+        for bind in where_binds {
+            query = bind_value_query(query, bind);
+        }
 
-        match &mut self.executor {
+        let start = Instant::now();
+        let result = match &mut self.executor {
             Executor::Pool(pool) => {
                 let res = query.execute(*pool).await?;
                 Ok(DB::rows_affected(&res))
@@ -540,44 +1011,171 @@ where
                 let res = query.execute(&mut **conn).await?;
                 Ok(DB::rows_affected(&res))
             }
-        }
+        };
+        record_query_metrics("bulk_update", T::table_name(), start.elapsed());
+        result
+    }
+
+    pub async fn update_all(self, values: serde_json::Value) -> Result<u64, sqlx::Error>
+    where
+        String: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        i64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        f64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    {
+        self.update(values).await
     }
 
     pub async fn delete(mut self) -> Result<u64, sqlx::Error> {
-        if self.filters.is_empty() {
+        self.ensure_safe_filters()?;
+        if self.filters.is_empty() && !self.allow_unsafe {
             return Err(sqlx::Error::Protocol(
                 "Refusing bulk delete without filters".to_string(),
             ));
         }
+        let (where_clause, where_binds) = self.render_where_clause(1);
         let sql = if T::has_soft_delete() {
             format!(
                 "UPDATE {} SET deleted_at = {}{}",
                 T::table_name(),
                 DB::current_timestamp_fn(),
-                self.build_where_clause()
+                where_clause
             )
         } else {
-            format!(
-                "DELETE FROM {}{}",
-                T::table_name(),
-                self.build_where_clause()
-            )
+            format!("DELETE FROM {}{}", T::table_name(), where_clause)
         };
 
-        match &mut self.executor {
+        tracing::debug!(
+            operation = "bulk_delete",
+            sql = %sql,
+            filters = %self.format_filters_for_log(),
+            "premix query"
+        );
+        let start = Instant::now();
+        let result = match &mut self.executor {
             Executor::Pool(pool) => {
-                let res = sqlx::query::<DB>(&sql).execute(*pool).await?;
+                let mut query = sqlx::query::<DB>(&sql);
+                for bind in where_binds {
+                    query = bind_value_query(query, bind);
+                }
+                let res = query.execute(*pool).await?;
                 Ok(DB::rows_affected(&res))
             }
             Executor::Conn(conn) => {
-                let res = sqlx::query::<DB>(&sql).execute(&mut **conn).await?;
+                let mut query = sqlx::query::<DB>(&sql);
+                for bind in where_binds {
+                    query = bind_value_query(query, bind);
+                }
+                let res = query.execute(&mut **conn).await?;
                 Ok(DB::rows_affected(&res))
             }
-        }
+        };
+        record_query_metrics("bulk_delete", T::table_name(), start.elapsed());
+        result
+    }
+
+    pub async fn delete_all(self) -> Result<u64, sqlx::Error> {
+        self.delete().await
     }
 }
 
 impl Premix {
+    pub fn detect_runtime_profile() -> RuntimeProfile {
+        if let Ok(value) = std::env::var("PREMIX_ENV") {
+            let value = value.to_ascii_lowercase();
+            if value.contains("serverless") || value.contains("lambda") || value.contains("edge") {
+                return RuntimeProfile::Serverless;
+            }
+            if value.contains("server") || value.contains("prod") || value.contains("production") {
+                return RuntimeProfile::Server;
+            }
+        }
+
+        if std::env::var_os("AWS_LAMBDA_FUNCTION_NAME").is_some()
+            || std::env::var_os("LAMBDA_TASK_ROOT").is_some()
+            || std::env::var_os("K_SERVICE").is_some()
+            || std::env::var_os("VERCEL").is_some()
+        {
+            return RuntimeProfile::Serverless;
+        }
+
+        RuntimeProfile::Server
+    }
+
+    #[cfg(feature = "sqlite")]
+    pub fn sqlite_pool_options(profile: RuntimeProfile) -> sqlx::sqlite::SqlitePoolOptions {
+        match profile {
+            RuntimeProfile::Server => sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(10)
+                .min_connections(1)
+                .acquire_timeout(Duration::from_secs(30))
+                .idle_timeout(Some(Duration::from_secs(10 * 60)))
+                .max_lifetime(Some(Duration::from_secs(30 * 60))),
+            RuntimeProfile::Serverless => sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(2)
+                .min_connections(0)
+                .acquire_timeout(Duration::from_secs(10))
+                .idle_timeout(Some(Duration::from_secs(30)))
+                .max_lifetime(Some(Duration::from_secs(5 * 60))),
+        }
+    }
+
+    #[cfg(feature = "postgres")]
+    pub fn postgres_pool_options(profile: RuntimeProfile) -> sqlx::postgres::PgPoolOptions {
+        match profile {
+            RuntimeProfile::Server => sqlx::postgres::PgPoolOptions::new()
+                .max_connections(10)
+                .min_connections(1)
+                .acquire_timeout(Duration::from_secs(30))
+                .idle_timeout(Some(Duration::from_secs(10 * 60)))
+                .max_lifetime(Some(Duration::from_secs(30 * 60))),
+            RuntimeProfile::Serverless => sqlx::postgres::PgPoolOptions::new()
+                .max_connections(2)
+                .min_connections(0)
+                .acquire_timeout(Duration::from_secs(10))
+                .idle_timeout(Some(Duration::from_secs(30)))
+                .max_lifetime(Some(Duration::from_secs(5 * 60))),
+        }
+    }
+
+    #[cfg(feature = "sqlite")]
+    pub async fn smart_sqlite_pool(database_url: &str) -> Result<sqlx::SqlitePool, sqlx::Error> {
+        Self::sqlite_pool_options(Self::detect_runtime_profile())
+            .connect(database_url)
+            .await
+    }
+
+    #[cfg(feature = "sqlite")]
+    pub async fn smart_sqlite_pool_with_profile(
+        database_url: &str,
+        profile: RuntimeProfile,
+    ) -> Result<sqlx::SqlitePool, sqlx::Error> {
+        Self::sqlite_pool_options(profile)
+            .connect(database_url)
+            .await
+    }
+
+    #[cfg(feature = "postgres")]
+    pub async fn smart_postgres_pool(database_url: &str) -> Result<sqlx::PgPool, sqlx::Error> {
+        Self::postgres_pool_options(Self::detect_runtime_profile())
+            .connect(database_url)
+            .await
+    }
+
+    #[cfg(feature = "postgres")]
+    pub async fn smart_postgres_pool_with_profile(
+        database_url: &str,
+        profile: RuntimeProfile,
+    ) -> Result<sqlx::PgPool, sqlx::Error> {
+        Self::postgres_pool_options(profile)
+            .connect(database_url)
+            .await
+    }
+
+    pub fn raw<'q>(sql: &'q str) -> RawQuery<'q> {
+        RawQuery { sql }
+    }
     pub async fn sync<DB, M>(pool: &sqlx::Pool<DB>) -> Result<(), sqlx::Error>
     where
         DB: SqlDialect,
@@ -587,14 +1185,26 @@ impl Premix {
         for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
     {
         let sql = M::create_table_sql();
+        tracing::debug!(operation = "sync", sql = %sql, "premix query");
         sqlx::query::<DB>(&sql).execute(pool).await?;
         Ok(())
+    }
+}
+
+impl<'q> RawQuery<'q> {
+    pub fn fetch_as<DB, T>(self) -> sqlx::query::QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
+    where
+        DB: Database,
+        for<'r> T: sqlx::FromRow<'r, DB::Row>,
+    {
+        sqlx::query_as::<DB, T>(self.sql)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use sqlx::{Sqlite, SqlitePool, sqlite::SqliteRow};
+    use std::time::Duration;
 
     use super::*;
 
@@ -605,14 +1215,12 @@ mod tests {
         deleted_at: Option<String>,
     }
 
-    #[async_trait::async_trait]
     impl ModelHooks for SoftDeleteModel {}
 
     impl ModelValidation for SoftDeleteModel {}
 
     struct HookDummy;
 
-    #[async_trait::async_trait]
     impl ModelHooks for HookDummy {}
 
     #[derive(Debug)]
@@ -651,7 +1259,6 @@ mod tests {
     }
 
     #[cfg(feature = "postgres")]
-    #[async_trait::async_trait]
     impl Model<sqlx::Postgres> for PgModel {
         fn table_name() -> &'static str {
             PG_TABLE
@@ -665,32 +1272,44 @@ mod tests {
         fn list_columns() -> Vec<String> {
             vec!["id".into(), "name".into()]
         }
-        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn save<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = sqlx::Postgres>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
-        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        fn update<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<UpdateResult, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = sqlx::Postgres>,
         {
-            Ok(UpdateResult::NotImplemented)
+            async move { Ok(UpdateResult::NotImplemented) }
         }
-        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn delete<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = sqlx::Postgres>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
+        fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> impl std::future::Future<Output = Result<Option<Self>, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = sqlx::Postgres>,
         {
-            Ok(None)
+            async move { Ok(None) }
         }
     }
 
@@ -713,7 +1332,6 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
     impl Model<Sqlite> for DbModel {
         fn table_name() -> &'static str {
             "db_users"
@@ -724,36 +1342,50 @@ mod tests {
         fn list_columns() -> Vec<String> {
             vec!["id".into(), "status".into(), "deleted_at".into()]
         }
-        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn save<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
-        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        fn update<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<UpdateResult, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(UpdateResult::NotImplemented)
+            async move { Ok(UpdateResult::NotImplemented) }
         }
-        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn delete<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
         fn has_soft_delete() -> bool {
             true
         }
-        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
+        fn sensitive_fields() -> &'static [&'static str] {
+            &["status"]
+        }
+        fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> impl std::future::Future<Output = Result<Option<Self>, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(None)
+            async move { Ok(None) }
         }
     }
 
-    #[async_trait::async_trait]
     impl Model<Sqlite> for DbHardModel {
         fn table_name() -> &'static str {
             "db_hard_users"
@@ -764,36 +1396,47 @@ mod tests {
         fn list_columns() -> Vec<String> {
             vec!["id".into(), "status".into()]
         }
-        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn save<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
-        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        fn update<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<UpdateResult, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(UpdateResult::NotImplemented)
+            async move { Ok(UpdateResult::NotImplemented) }
         }
-        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn delete<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
+        fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> impl std::future::Future<Output = Result<Option<Self>, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(None)
+            async move { Ok(None) }
         }
     }
 
-    #[async_trait::async_trait]
     impl Model<Sqlite> for SyncModel {
         fn table_name() -> &'static str {
             "sync_items"
@@ -804,36 +1447,47 @@ mod tests {
         fn list_columns() -> Vec<String> {
             vec!["id".into(), "name".into()]
         }
-        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn save<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
-        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        fn update<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<UpdateResult, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(UpdateResult::NotImplemented)
+            async move { Ok(UpdateResult::NotImplemented) }
         }
-        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn delete<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
+        fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> impl std::future::Future<Output = Result<Option<Self>, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(None)
+            async move { Ok(None) }
         }
     }
 
-    #[async_trait::async_trait]
     impl Model<Sqlite> for SoftDeleteModel {
         fn table_name() -> &'static str {
             "users"
@@ -844,36 +1498,47 @@ mod tests {
         fn list_columns() -> Vec<String> {
             Vec::new()
         }
-        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn save<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
-        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        fn update<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<UpdateResult, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(UpdateResult::NotImplemented)
+            async move { Ok(UpdateResult::NotImplemented) }
         }
-        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn delete<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
         fn has_soft_delete() -> bool {
             true
         }
-        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
+        fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> impl std::future::Future<Output = Result<Option<Self>, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(None)
+            async move { Ok(None) }
         }
     }
 
-    #[async_trait::async_trait]
     impl Model<Sqlite> for HardDeleteModel {
         fn table_name() -> &'static str {
             "hard_users"
@@ -884,32 +1549,44 @@ mod tests {
         fn list_columns() -> Vec<String> {
             Vec::new()
         }
-        async fn save<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn save<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
-        async fn update<'a, E>(&mut self, _executor: E) -> Result<UpdateResult, sqlx::Error>
+        fn update<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<UpdateResult, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(UpdateResult::NotImplemented)
+            async move { Ok(UpdateResult::NotImplemented) }
         }
-        async fn delete<'a, E>(&mut self, _executor: E) -> Result<(), sqlx::Error>
+        fn delete<'a, E>(
+            &'a mut self,
+            _executor: E,
+        ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(())
+            async move { Ok(()) }
         }
         fn has_soft_delete() -> bool {
             false
         }
-        async fn find_by_id<'a, E>(_executor: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
+        fn find_by_id<'a, E>(
+            _executor: E,
+            _id: i32,
+        ) -> impl std::future::Future<Output = Result<Option<Self>, sqlx::Error>> + Send
         where
             E: IntoExecutor<'a, DB = Sqlite>,
         {
-            Ok(None)
+            async move { Ok(None) }
         }
     }
 
@@ -917,12 +1594,12 @@ mod tests {
     async fn query_builder_to_sql_includes_soft_delete_filter() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let query = SoftDeleteModel::find_in_pool(&pool)
-            .filter("age > 18")
+            .filter_gt("age", 18)
             .limit(10)
             .offset(5);
         let sql = query.to_sql();
         assert!(sql.contains("FROM users"));
-        assert!(sql.contains("age > 18"));
+        assert!(sql.contains("age > ?"));
         assert!(sql.contains("deleted_at IS NULL"));
         assert!(sql.contains("LIMIT 10"));
         assert!(sql.contains("OFFSET 5"));
@@ -941,17 +1618,17 @@ mod tests {
     async fn query_builder_with_deleted_skips_soft_delete_filter() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let query = SoftDeleteModel::find_in_pool(&pool)
-            .filter("age > 18")
+            .filter_gt("age", 18)
             .with_deleted();
         let sql = query.to_sql();
-        assert!(sql.contains("age > 18"));
+        assert!(sql.contains("age > ?"));
         assert!(!sql.contains("deleted_at IS NULL"));
     }
 
     #[tokio::test]
     async fn query_builder_to_update_sql_includes_fields() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        let query = SoftDeleteModel::find_in_pool(&pool).filter("status = 'inactive'");
+        let query = SoftDeleteModel::find_in_pool(&pool).filter_eq("status", "inactive");
         let sql = query
             .to_update_sql(&serde_json::json!({ "status": "active", "age": 1 }))
             .unwrap();
@@ -975,7 +1652,7 @@ mod tests {
     #[tokio::test]
     async fn query_builder_to_delete_sql_soft_delete() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        let query = SoftDeleteModel::find_in_pool(&pool).filter("id = 1");
+        let query = SoftDeleteModel::find_in_pool(&pool).filter_eq("id", 1);
         let sql = query.to_delete_sql();
         assert!(sql.starts_with("UPDATE users SET deleted_at"));
     }
@@ -983,7 +1660,7 @@ mod tests {
     #[tokio::test]
     async fn query_builder_to_delete_sql_hard_delete() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        let query = HardDeleteModel::find_in_pool(&pool).filter("id = 1");
+        let query = HardDeleteModel::find_in_pool(&pool).filter_eq("id", 1);
         let sql = query.to_delete_sql();
         assert!(sql.starts_with("DELETE FROM hard_users"));
     }
@@ -991,6 +1668,53 @@ mod tests {
     #[test]
     fn model_raw_sql_compiles() {
         let _query = SoftDeleteModel::raw_sql("SELECT * FROM users");
+    }
+
+    #[tokio::test]
+    async fn premix_raw_fetch_as_maps_struct() {
+        #[derive(Debug, sqlx::FromRow)]
+        struct ReportRow {
+            count: i64,
+        }
+
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE report_items (id INTEGER PRIMARY KEY);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO report_items DEFAULT VALUES;")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let row = Premix::raw("SELECT COUNT(*) as count FROM report_items")
+            .fetch_as::<Sqlite, ReportRow>()
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(row.count, 1);
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[test]
+    fn smart_sqlite_pool_options_serverless() {
+        let opts = Premix::sqlite_pool_options(RuntimeProfile::Serverless);
+        assert_eq!(opts.get_max_connections(), 2);
+        assert_eq!(opts.get_min_connections(), 0);
+        assert_eq!(opts.get_acquire_timeout(), Duration::from_secs(10));
+        assert_eq!(opts.get_idle_timeout(), Some(Duration::from_secs(30)));
+        assert_eq!(opts.get_max_lifetime(), Some(Duration::from_secs(5 * 60)));
+    }
+
+    #[cfg(feature = "postgres")]
+    #[test]
+    fn smart_postgres_pool_options_server() {
+        let opts = Premix::postgres_pool_options(RuntimeProfile::Server);
+        assert_eq!(opts.get_max_connections(), 10);
+        assert_eq!(opts.get_min_connections(), 1);
+        assert_eq!(opts.get_acquire_timeout(), Duration::from_secs(30));
+        assert_eq!(opts.get_idle_timeout(), Some(Duration::from_secs(10 * 60)));
+        assert_eq!(opts.get_max_lifetime(), Some(Duration::from_secs(30 * 60)));
     }
 
     #[test]
@@ -1091,8 +1815,8 @@ mod tests {
     #[tokio::test]
     async fn model_find_builds_query() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        let sql = DbModel::find(&pool).filter("status = 'active'").to_sql();
-        assert!(sql.contains("status = 'active'"));
+        let sql = DbModel::find(&pool).filter_eq("status", "active").to_sql();
+        assert!(sql.contains("status = ?"));
     }
 
     #[tokio::test]
@@ -1132,7 +1856,7 @@ mod tests {
             .unwrap();
 
         let updated = DbModel::find_in_pool(&pool)
-            .filter("status = 'inactive'")
+            .filter_eq("status", "inactive")
             .update(serde_json::json!({ "status": "active" }))
             .await
             .unwrap();
@@ -1161,7 +1885,7 @@ mod tests {
             .unwrap();
 
         let updated = DbModel::find_in_pool(&pool)
-            .filter("id = 1")
+            .filter_eq("id", 1)
             .update(serde_json::json!({ "status": "active", "flag": true, "deleted_at": null }))
             .await
             .unwrap();
@@ -1181,7 +1905,7 @@ mod tests {
             .unwrap();
 
         let updated = DbModel::find_in_pool(&pool)
-            .filter("id = 1")
+            .filter_eq("id", 1)
             .update(serde_json::json!({ "ratio": 1.75 }))
             .await
             .unwrap();
@@ -1209,7 +1933,7 @@ mod tests {
             .unwrap();
 
         let err = DbModel::find_in_pool(&pool)
-            .filter("id = 1")
+            .filter_eq("id", 1)
             .update(serde_json::json!({ "meta": { "a": 1 } }))
             .await
             .unwrap_err();
@@ -1231,7 +1955,7 @@ mod tests {
             .unwrap();
 
         let deleted = DbModel::find_in_pool(&pool)
-            .filter("status = 'active'")
+            .filter_eq("status", "active")
             .delete()
             .await
             .unwrap();
@@ -1258,7 +1982,7 @@ mod tests {
             .unwrap();
 
         let deleted = DbHardModel::find_in_pool(&pool)
-            .filter("status = 'active'")
+            .filter_eq("status", "active")
             .delete()
             .await
             .unwrap();
@@ -1293,6 +2017,26 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn query_builder_filter_eq_uses_placeholders() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let sql = DbModel::find_in_pool(&pool)
+            .filter_eq("status", "active")
+            .to_sql();
+        assert!(sql.contains("status = ?"));
+    }
+
+    #[tokio::test]
+    async fn query_builder_filters_mask_sensitive_fields() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let query = DbModel::find_in_pool(&pool)
+            .filter_eq("status", "active")
+            .filter_eq("id", 1);
+        let filters = query.format_filters_for_log();
+        assert!(filters.contains("status = ***"));
+        assert!(filters.contains("id = 1"));
     }
 
     #[tokio::test]
@@ -1356,7 +2100,7 @@ mod tests {
 
         let mut tx = pool.begin().await.unwrap();
         let updated = DbModel::find_in_tx(&mut tx)
-            .filter("status = 'inactive'")
+            .filter_eq("status", "inactive")
             .update(serde_json::json!({ "status": "active" }))
             .await
             .unwrap();
@@ -1378,7 +2122,7 @@ mod tests {
 
         let mut tx = pool.begin().await.unwrap();
         let deleted = DbHardModel::find_in_tx(&mut tx)
-            .filter("status = 'active'")
+            .filter_eq("status", "active")
             .delete()
             .await
             .unwrap();
@@ -1400,6 +2144,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn query_builder_update_all_matches_update() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE db_users (id INTEGER PRIMARY KEY, status TEXT, deleted_at TEXT);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO db_users (status) VALUES ('inactive');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let updated = DbModel::find_in_pool(&pool)
+            .filter_eq("status", "inactive")
+            .update_all(serde_json::json!({ "status": "active" }))
+            .await
+            .unwrap();
+        assert_eq!(updated, 1);
+    }
+
+    #[tokio::test]
     async fn query_builder_delete_without_filters_is_rejected() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let err = DbHardModel::find_in_pool(&pool).delete().await.unwrap_err();
@@ -1407,6 +2173,79 @@ mod tests {
             err.to_string()
                 .contains("Refusing bulk delete without filters")
         );
+    }
+
+    #[tokio::test]
+    async fn query_builder_delete_all_without_filters_is_rejected() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let err = DbHardModel::find_in_pool(&pool)
+            .delete_all()
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Refusing bulk delete without filters")
+        );
+    }
+
+    #[tokio::test]
+    async fn query_builder_delete_all_matches_delete() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_hard_users (id INTEGER PRIMARY KEY, status TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_hard_users (status) VALUES ('active');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let deleted = DbHardModel::find_in_pool(&pool)
+            .filter_eq("status", "active")
+            .delete_all()
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
+    }
+
+    #[tokio::test]
+    async fn query_builder_delete_without_filters_allows_unsafe() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_hard_users (id INTEGER PRIMARY KEY, status TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_hard_users (status) VALUES ('active');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let deleted = DbHardModel::find_in_pool(&pool)
+            .allow_unsafe()
+            .delete()
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
+    }
+
+    #[tokio::test]
+    async fn query_builder_delete_all_without_filters_allows_unsafe() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_hard_users (id INTEGER PRIMARY KEY, status TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO db_hard_users (status) VALUES ('active');")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let deleted = DbHardModel::find_in_pool(&pool)
+            .allow_unsafe()
+            .delete_all()
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
     }
 
     #[tokio::test]
@@ -1425,7 +2264,7 @@ mod tests {
 
         let mut tx = pool.begin().await.unwrap();
         let updated = DbModel::find_in_tx(&mut tx)
-            .filter("status = 'inactive'")
+            .filter_eq("status", "inactive")
             .update(serde_json::json!({ "status": "active" }))
             .await
             .unwrap();
@@ -1437,6 +2276,47 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_utils_with_test_transaction_rolls_back() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query("CREATE TABLE db_tx (id INTEGER PRIMARY KEY, name TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        with_test_transaction(&pool, |conn| {
+            Box::pin(async move {
+                sqlx::query("INSERT INTO db_tx (name) VALUES ('alpha');")
+                    .execute(conn)
+                    .await?;
+                Ok(())
+            })
+        })
+        .await
+        .unwrap();
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_tx")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_utils_mock_database_sqlite_works() {
+        let mock = MockDatabase::new_sqlite().await.unwrap();
+        sqlx::query("CREATE TABLE db_mock (id INTEGER PRIMARY KEY);")
+            .execute(mock.pool())
+            .await
+            .unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM db_mock")
+            .fetch_one(mock.pool())
+            .await
+            .unwrap();
         assert_eq!(count, 0);
     }
 
@@ -1469,7 +2349,7 @@ mod tests {
             status: "active".to_string(),
             deleted_at: None,
         }];
-        SoftDeleteModel::eager_load(&mut models, "posts", &pool)
+        SoftDeleteModel::eager_load(&mut models, "posts", Executor::Pool(&pool))
             .await
             .unwrap();
     }
@@ -1598,7 +2478,7 @@ mod tests {
         assert_eq!(<sqlx::Postgres as SqlDialect>::last_insert_id(&res), 0);
 
         let updated = PgModel::find_in_pool(&pool)
-            .filter("name = 'alpha'")
+            .filter_eq("name", "alpha")
             .update(serde_json::json!({ "name": "beta" }))
             .await
             .unwrap();
@@ -1611,7 +2491,7 @@ mod tests {
         assert_eq!(names, vec!["beta".to_string()]);
 
         let sql = PgModel::find_in_pool(&pool)
-            .filter("id = 1")
+            .filter_eq("id", 1)
             .to_update_sql(&serde_json::json!({ "name": "gamma" }))
             .unwrap();
         assert!(sql.contains("name = $1"));
@@ -1695,7 +2575,11 @@ mod tests {
             status: "active".to_string(),
             deleted_at: None,
         }];
-        <SoftDeleteModel as Model<Sqlite>>::eager_load(&mut models, "posts", &pool)
+        <SoftDeleteModel as Model<Sqlite>>::eager_load(
+            &mut models,
+            "posts",
+            Executor::Pool(&pool),
+        )
             .await
             .unwrap();
     }
@@ -1721,7 +2605,7 @@ mod tests {
     async fn bulk_update_rejects_non_object() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let err = SoftDeleteModel::find_in_pool(&pool)
-            .filter("id = 1")
+            .filter_eq("id", 1)
             .update(serde_json::json!("bad"))
             .await
             .unwrap_err();
@@ -1735,7 +2619,7 @@ mod tests {
     async fn bulk_update_rejects_unsupported_value_type() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         let err = SoftDeleteModel::find_in_pool(&pool)
-            .filter("id = 1")
+            .filter_eq("id", 1)
             .update(serde_json::json!({ "status": ["bad"] }))
             .await
             .unwrap_err();
@@ -1755,7 +2639,7 @@ mod tests {
             .unwrap();
 
         let rows = SoftDeleteModel::find_in_pool(&pool)
-            .filter("id = 1")
+            .filter_eq("id", 1)
             .update(serde_json::json!({ "age": 11 }))
             .await
             .unwrap();

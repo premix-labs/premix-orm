@@ -9,7 +9,7 @@ struct User {
 
 #[tokio::test]
 async fn query_builder_examples() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 
     let mut user = User { id: 0, age: 21, deleted_at: None };
@@ -19,7 +19,7 @@ async fn query_builder_examples() -> Result<(), Box<dyn std::error::Error>> {
     assert!(found.is_some());
 
     let users = User::find_in_pool(&pool)
-        .filter("age > 18")
+        .filter_gt("age", 18)
         .limit(20)
         .offset(0)
         .all()

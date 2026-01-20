@@ -19,6 +19,7 @@ cargo install premix-cli
 - Project initialization (placeholder scaffold)
 - SQL-based migrations (create, up, down)
 - Experimental schema sync command
+- Schema diff/migration via `premix schema` (requires `premix-schema` bin)
 
 ## Usage
 
@@ -70,6 +71,21 @@ call `Premix::sync` for the models you want to create.
 
 *Note: For robustness, we still recommend calling `Premix::sync(&pool)` in your
 application code on startup.*
+
+### Schema Diff (SQLite v1)
+Diff or generate migrations from local models (SQLite v1).
+
+```bash
+premix schema diff --database sqlite:my_app.db
+premix schema migrate --database sqlite:my_app.db --out migrations/20260101000000_schema.sql
+```
+
+The CLI looks for `src/bin/premix-schema.rs` and runs it. That binary should
+use `premix_core::schema` to compare models to the live database and print SQL
+when running `migrate`.
+
+Recommended output includes a summary using
+`premix_core::schema::format_schema_diff_summary`.
 
 ## Compatibility
 

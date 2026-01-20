@@ -1,6 +1,5 @@
 use premix_core::{Model, ModelHooks, Premix};
 use premix_macros::Model;
-use sqlx::sqlite::SqlitePool;
 
 #[derive(Model, Debug)]
 #[premix(custom_hooks)]
@@ -11,26 +10,30 @@ struct User {
 }
 
 // Override Hooks!
-#[premix_core::async_trait::async_trait]
+#[allow(clippy::manual_async_fn)]
 impl ModelHooks for User {
-    async fn before_save(&mut self) -> Result<(), sqlx::Error> {
-        println!("🎣 [before_save] Hook triggered for: {}", self.name);
-        if self.role == "admin" {
-            self.name = format!("⭐ {}", self.name);
-            println!("   -> Modified name to: {}", self.name);
+    fn before_save(&mut self) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send {
+        async move {
+            println!("🎣 [before_save] Hook triggered for: {}", self.name);
+            if self.role == "admin" {
+                self.name = format!("⭐ {}", self.name);
+                println!("   -> Modified name to: {}", self.name);
+            }
+            Ok(())
         }
-        Ok(())
     }
 
-    async fn after_save(&mut self) -> Result<(), sqlx::Error> {
-        println!("🎣 [after_save] User saved successfully!");
-        Ok(())
+    fn after_save(&mut self) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + Send {
+        async move {
+            println!("🎣 [after_save] User saved successfully!");
+            Ok(())
+        }
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
     // Setup
     Premix::sync::<sqlx::Sqlite, User>(&pool).await?;

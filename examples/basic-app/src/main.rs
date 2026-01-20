@@ -1,6 +1,5 @@
 use premix_core::{Model, Premix};
 use premix_macros::Model;
-use sqlx::sqlite::SqlitePool;
 
 #[derive(Model)]
 struct User {
@@ -12,7 +11,7 @@ struct User {
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     // 1. Create Connection Pool (In-memory for speed)
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
     // 2. Extract SQL from our Macro
     let sql = <User as Model<sqlx::Sqlite>>::create_table_sql();

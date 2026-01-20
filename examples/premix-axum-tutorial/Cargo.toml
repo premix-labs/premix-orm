@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-premix-orm = { path = "../../premix-orm" }
+premix-orm = { path = "../../premix-orm", features = ["metrics"] }
 premix-core = { path = "../../premix-core" }
+premix-metrics = { path = "../../premix-metrics" }
 axum = { version = "0.8.1", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }

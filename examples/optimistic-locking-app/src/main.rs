@@ -1,6 +1,5 @@
 use premix_core::{Executor, Model, Premix, UpdateResult};
 use premix_macros::Model;
-use sqlx::sqlite::SqlitePool;
 
 #[derive(Model, Debug, Clone)]
 struct Product {
@@ -12,7 +11,7 @@ struct Product {
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
     // Setup
     Premix::sync::<sqlx::Sqlite, Product>(&pool).await?;

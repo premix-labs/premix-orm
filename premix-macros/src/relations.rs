@@ -98,24 +98,82 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
 
                     arms.extend(quote! {
                             #relation_name => {
-                                let ids: Vec<i32> = models.iter().map(|m| m.id).collect();
+                                let mut ids: Vec<i32> = models.iter().map(|m| m.id).collect();
                                 if ids.is_empty() { return Ok(()); }
-                                let params = (1..=ids.len()).map(|i| <DB as premix_orm::SqlDialect>::placeholder(i)).collect::<Vec<_>>().join(",");
-                                let sql = format!("SELECT * FROM {} WHERE {} IN ({})", #child_table, #parent_fk_str, params);
-                                let mut query = premix_orm::sqlx::query_as::<DB, #child_model>(&sql);
-                                for id in ids { query = query.bind(id); }
+                                ids.sort_unstable();
+                                ids.dedup();
 
-                                let children = executor.fetch_all(query).await?;
+                                let mut grouped: std::collections::HashMap<i32, Vec<#child_model>> =
+                                    std::collections::HashMap::with_capacity(models.len());
 
-                                let mut grouped: std::collections::HashMap<i32, Vec<#child_model>> = std::collections::HashMap::new();
-                                for child in children {
-                                    grouped.entry(child.#parent_fk_ident).or_default().push(child);
+                                const CHUNK_SIZE: usize = 500;
+                                for chunk in ids.chunks(CHUNK_SIZE) {
+                                    let params = premix_orm::build_placeholders::<DB>(1, chunk.len());
+                                    let sql = format!(
+                                        "SELECT * FROM {} WHERE {} IN ({})",
+                                        #child_table,
+                                        #parent_fk_str,
+                                        params
+                                    );
+                                    let mut query = premix_orm::sqlx::query_as::<DB, #child_model>(&sql);
+                                    for id in chunk {
+                                        query = query.bind(*id);
+                                    }
+                                    let children = executor.fetch_all(query).await?;
+                                    for child in children {
+                                        grouped.entry(child.#parent_fk_ident).or_default().push(child);
+                                    }
                                 }
+
                                 for model in models.iter_mut() {
                                     if let Some(children) = grouped.remove(&model.id) {
                                         model.#field_name = Some(children);
                                     } else {
                                         model.#field_name = Some(Vec::new());
+                                    }
+                                }
+                            },
+                        });
+                } else if attr.path().is_ident("belongs_to") {
+                    let parent_model = attr.parse_args::<Ident>()?;
+                    let relation_name = field_name.as_ref().unwrap().to_string();
+                    let parent_table = format!("{}s", parent_model.to_string().to_lowercase());
+                    let fk_str = format!("{}_id", parent_model.to_string().to_lowercase());
+                    let fk_ident = format_ident!("{}", fk_str);
+
+                    arms.extend(quote! {
+                            #relation_name => {
+                                let mut ids: Vec<i32> = models.iter().map(|m| m.#fk_ident).collect();
+                                if ids.is_empty() { return Ok(()); }
+                                ids.sort_unstable();
+                                ids.dedup();
+
+                                let mut grouped: std::collections::HashMap<i32, #parent_model> =
+                                    std::collections::HashMap::with_capacity(ids.len());
+
+                                const CHUNK_SIZE: usize = 500;
+                                for chunk in ids.chunks(CHUNK_SIZE) {
+                                    let params = premix_orm::build_placeholders::<DB>(1, chunk.len());
+                                    let sql = format!(
+                                        "SELECT * FROM {} WHERE id IN ({})",
+                                        #parent_table,
+                                        params
+                                    );
+                                    let mut query = premix_orm::sqlx::query_as::<DB, #parent_model>(&sql);
+                                    for id in chunk {
+                                        query = query.bind(*id);
+                                    }
+                                    let parents = executor.fetch_all(query).await?;
+                                    for parent in parents {
+                                        grouped.insert(parent.id, parent);
+                                    }
+                                }
+
+                                for model in models.iter_mut() {
+                                    if let Some(parent) = grouped.get(&model.#fk_ident) {
+                                        model.#field_name = Some(parent.clone());
+                                    } else {
+                                        model.#field_name = None;
                                     }
                                 }
                             },
@@ -128,7 +186,9 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
     Ok(quote! {
         match relation {
             #arms
-            _ => { println!("Warning: Relation '{}' not found", relation); }
+            _ => {
+                premix_orm::tracing::warn!("premix relation '{}' not found", relation);
+            }
         }
         Ok(())
     })
@@ -167,6 +227,22 @@ mod tests {
         assert!(tokens.contains("posts"));
         assert!(tokens.contains("WHERE"));
         assert!(tokens.contains("IN"));
+    }
+
+    #[test]
+    fn generate_eager_load_body_includes_belongs_to_arm() {
+        let input: DeriveInput = parse_quote! {
+            struct Post {
+                id: i32,
+                user_id: i32,
+                #[belongs_to(User)]
+                user: Option<User>,
+            }
+        };
+        let tokens = generate_eager_load_body(&input).unwrap().to_string();
+        assert!(tokens.contains("user"));
+        assert!(tokens.contains("user_id"));
+        assert!(tokens.contains("WHERE id IN"));
     }
 
     #[test]

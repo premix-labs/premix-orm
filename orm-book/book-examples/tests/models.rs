@@ -21,7 +21,7 @@ async fn model_helpers_compile_and_generate_sql() -> Result<(), Box<dyn std::err
     let sql = BasicUser::create_table_sql();
     assert!(sql.contains("CREATE TABLE"));
 
-    let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, IgnoredFieldUser>(&pool).await?;
     Ok(())
 }

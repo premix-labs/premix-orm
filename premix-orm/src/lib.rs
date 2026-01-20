@@ -25,7 +25,7 @@
 //! }
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+//! let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 //! premix_orm::Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 //!
 //! let mut user = User { id: 0, name: "Alice".to_string() };
@@ -77,7 +77,7 @@
 //!
 //! # async fn example(pool: premix_orm::sqlx::SqlitePool) -> Result<(), sqlx::Error> {
 //! let _updated = User::find_in_pool(&pool)
-//!     .filter("status = 'inactive'")
+//!     .filter_eq("status", "inactive")
 //!     .update(json!({ "status": "active" }))
 //!     .await?;
 //! # Ok(())
@@ -88,7 +88,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! premix-orm = "1.0.5"
+//! premix-orm = "1.0.6-alpha"
 //! ```
 //!
 //! ## Book

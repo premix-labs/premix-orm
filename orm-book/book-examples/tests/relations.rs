@@ -21,7 +21,7 @@ struct Post {
 
 #[tokio::test]
 async fn relations_examples() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 

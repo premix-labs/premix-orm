@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    Attribute, Data, DeriveInput, Field, Fields, Ident, Token, parse_macro_input,
+    Attribute, Data, DeriveInput, Field, Fields, Ident, LitStr, Token, parse_macro_input,
     punctuated::Punctuated,
 };
 
@@ -108,6 +108,55 @@ mod tests {
     }
 
     #[test]
+    fn generate_generic_impl_includes_schema_impl() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("ModelSchema"));
+        assert!(tokens.contains("SchemaColumn"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_index_and_foreign_key_metadata() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[premix(index)]
+                name: String,
+                #[premix(unique(name = "users_email_uidx"))]
+                email: String,
+                #[premix(foreign_key(table = "accounts", column = "id"))]
+                account_id: i32,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("SchemaIndex"));
+        assert!(tokens.contains("idx_users_name"));
+        assert!(tokens.contains("users_email_uidx"));
+        assert!(tokens.contains("SchemaForeignKey"));
+        assert!(tokens.contains("accounts"));
+        assert!(tokens.contains("account_id"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_sensitive_fields() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[premix(sensitive)]
+                email: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("sensitive_fields"));
+        assert!(tokens.contains("\"email\""));
+    }
+
+    #[test]
     fn generate_generic_impl_skips_custom_hooks_and_validation() {
         let input: DeriveInput = parse_quote! {
             #[premix(custom_hooks, custom_validation)]
@@ -146,6 +195,24 @@ mod tests {
             name: String
         };
         assert!(!is_ignored(&field));
+    }
+
+    #[test]
+    fn is_sensitive_detects_attribute() {
+        let field: Field = parse_quote! {
+            #[premix(sensitive)]
+            secret: String
+        };
+        assert!(is_sensitive(&field));
+    }
+
+    #[test]
+    fn is_sensitive_false_for_other_attrs() {
+        let field: Field = parse_quote! {
+            #[serde(skip)]
+            secret: String
+        };
+        assert!(!is_sensitive(&field));
     }
 
     #[test]
@@ -274,28 +341,116 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         .map(|f| f.ident.as_ref().unwrap())
         .collect();
     let field_types: Vec<_> = db_fields.iter().map(|f| &f.ty).collect();
-    let field_indices: Vec<_> = (0..db_fields.len()).collect();
+    let _field_indices: Vec<_> = (0..db_fields.len()).collect();
     let field_names: Vec<_> = field_idents.iter().map(|id| id.to_string()).collect();
+    let field_names_no_id: Vec<_> = field_names
+        .iter()
+        .filter(|name| *name != "id")
+        .cloned()
+        .collect();
+    let field_names_no_id_len = field_names_no_id.len();
+    let all_columns_joined = field_names.join(", ");
+    let no_id_columns_joined = field_names_no_id.join(", ");
     let field_idents_len = field_idents.len();
+    let field_nullables: Vec<_> = db_fields.iter().map(|f| is_option_type(&f.ty)).collect();
+    let field_primary_keys: Vec<_> = field_names.iter().map(|n| n == "id").collect();
+    let field_sql_types: Vec<_> = db_fields
+        .iter()
+        .map(|field| {
+            let name = field.ident.as_ref().unwrap().to_string();
+            sql_type_for_field(&name, &field.ty).to_string()
+        })
+        .collect();
+    let field_sql_type_exprs: Vec<_> = db_fields
+        .iter()
+        .map(|field| {
+            let name = field.ident.as_ref().unwrap().to_string();
+            sql_type_expr_for_field(&name, &field.ty)
+        })
+        .collect();
+    let sensitive_field_literals: Vec<LitStr> = db_fields
+        .iter()
+        .filter(|f| is_sensitive(f))
+        .map(|f| {
+            LitStr::new(
+                &f.ident.as_ref().unwrap().to_string(),
+                f.ident.as_ref().unwrap().span(),
+            )
+        })
+        .collect();
 
     let eager_load_body = relations::generate_eager_load_body(input)?;
+    let (index_specs, foreign_key_specs) = collect_schema_specs(all_fields, &table_name)?;
+    let index_tokens: Vec<_> = index_specs
+        .iter()
+        .map(|spec| {
+            let name = &spec.name;
+            let columns = &spec.columns;
+            let unique = spec.unique;
+            quote! {
+                premix_orm::schema::SchemaIndex {
+                    name: #name.to_string(),
+                    columns: vec![#(#columns.to_string()),*],
+                    unique: #unique,
+                }
+            }
+        })
+        .collect();
+    let foreign_key_tokens: Vec<_> = foreign_key_specs
+        .iter()
+        .map(|spec| {
+            let column = &spec.column;
+            let ref_table = &spec.ref_table;
+            let ref_column = &spec.ref_column;
+            quote! {
+                premix_orm::schema::SchemaForeignKey {
+                    column: #column.to_string(),
+                    ref_table: #ref_table.to_string(),
+                    ref_column: #ref_column.to_string(),
+                }
+            }
+        })
+        .collect();
     let has_version = field_names.contains(&"version".to_string());
     let has_soft_delete = field_names.contains(&"deleted_at".to_string());
 
     let update_impl = if has_version {
         quote! {
-            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>
+            fn update<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<
+                Output = Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>,
+            > + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
             {
+                async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_orm::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
+                let mut set_clause = String::new();
+                let mut i = 1usize;
+                #(
+                    if i > 1 {
+                        set_clause.push_str(", ");
+                    }
+                    set_clause.push_str(#field_names);
+                    set_clause.push_str(" = ");
+                    set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                    i += 1;
+                )*
                 let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
                 let ver_p = <DB as premix_orm::SqlDialect>::placeholder(2 + #field_idents_len);
                 let sql = format!(
                     "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
                     table_name, set_clause, id_p, ver_p
+                );
+
+                premix_orm::tracing::debug!(
+                    operation = "update",
+                    table = table_name,
+                    sql = %sql,
+                    "premix query"
                 );
 
                 let mut query = premix_orm::sqlx::query::<DB>(&sql)
@@ -320,19 +475,43 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     self.version += 1;
                     Ok(premix_orm::UpdateResult::Success)
                 }
+                }
             }
         }
     } else {
         quote! {
-            async fn update<'a, E>(&mut self, executor: E) -> Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>
+            fn update<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<
+                Output = Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>,
+            > + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
             {
+                async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let set_clause = vec![ #( format!("{} = {}", #field_names, <DB as premix_orm::SqlDialect>::placeholder(1 + #field_indices)) ),* ].join(", ");
+                let mut set_clause = String::new();
+                let mut i = 1usize;
+                #(
+                    if i > 1 {
+                        set_clause.push_str(", ");
+                    }
+                    set_clause.push_str(#field_names);
+                    set_clause.push_str(" = ");
+                    set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                    i += 1;
+                )*
                 let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
                 let sql = format!("UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
+
+                premix_orm::tracing::debug!(
+                    operation = "update",
+                    table = table_name,
+                    sql = %sql,
+                    "premix query"
+                );
 
                 let mut query = premix_orm::sqlx::query::<DB>(&sql)
                     #( .bind(&self.#field_idents) )*
@@ -345,44 +524,71 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 } else {
                     Ok(premix_orm::UpdateResult::Success)
                 }
+                }
             }
         }
     };
 
     let delete_impl = if has_soft_delete {
         quote! {
-            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_orm::sqlx::Error>
+            fn delete<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
             {
+                async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
                 let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
                 let sql = format!("UPDATE {} SET deleted_at = {} WHERE id = {}", table_name, <DB as premix_orm::SqlDialect>::current_timestamp_fn(), id_p);
+
+                premix_orm::tracing::debug!(
+                    operation = "delete",
+                    table = table_name,
+                    sql = %sql,
+                    "premix query"
+                );
 
                 let query = premix_orm::sqlx::query::<DB>(&sql).bind(&self.id);
                 executor.execute(query).await?;
 
                 self.deleted_at = Some("DELETED".to_string());
                 Ok(())
+                }
             }
             fn has_soft_delete() -> bool { true }
         }
     } else {
         quote! {
-            async fn delete<'a, E>(&mut self, executor: E) -> Result<(), premix_orm::sqlx::Error>
+            fn delete<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
             {
+                async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
                 let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
                 let sql = format!("DELETE FROM {} WHERE id = {}", table_name, id_p);
 
+                premix_orm::tracing::debug!(
+                    operation = "delete",
+                    table = table_name,
+                    sql = %sql,
+                    "premix query"
+                );
+
                 let query = premix_orm::sqlx::query::<DB>(&sql).bind(&self.id);
                 executor.execute(query).await?;
 
                 Ok(())
+                }
             }
             fn has_soft_delete() -> bool { false }
         }
@@ -391,10 +597,14 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
     let mut related_model_bounds = Vec::new();
     for field in all_fields {
         for attr in &field.attrs {
-            if (attr.path().is_ident("has_many") || attr.path().is_ident("belongs_to"))
+            if attr.path().is_ident("has_many")
                 && let Ok(related_ident) = attr.parse_args::<syn::Ident>()
             {
                 related_model_bounds.push(quote! { #related_ident: premix_orm::Model<DB> });
+            } else if attr.path().is_ident("belongs_to")
+                && let Ok(related_ident) = attr.parse_args::<syn::Ident>()
+            {
+                related_model_bounds.push(quote! { #related_ident: premix_orm::Model<DB> + Clone });
             }
         }
     }
@@ -403,7 +613,6 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         quote! {}
     } else {
         quote! {
-            #[premix_orm::async_trait::async_trait]
             impl premix_orm::ModelHooks for #struct_name {}
         }
     };
@@ -440,7 +649,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             }
         }
 
-        #[premix_orm::async_trait::async_trait]
+
         impl<DB> premix_orm::Model<DB> for #struct_name
         where
             DB: premix_orm::SqlDialect,
@@ -463,18 +672,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 let mut cols = vec!["id ".to_string() + <DB as premix_orm::SqlDialect>::auto_increment_pk()];
                 #(
                     if #field_names != "id" {
-                        let field_name: &str = #field_names;
-                        let sql_type = if field_name.ends_with("_id") {
-                            <DB as premix_orm::SqlDialect>::int_type()
-                        } else {
-                            match field_name {
-                                "name" | "title" | "status" | "email" | "role" => <DB as premix_orm::SqlDialect>::text_type(),
-                                "age" | "version" | "price" | "balance" => <DB as premix_orm::SqlDialect>::int_type(),
-                                "is_active" => <DB as premix_orm::SqlDialect>::bool_type(),
-                                "deleted_at" => <DB as premix_orm::SqlDialect>::text_type(),
-                                _ => <DB as premix_orm::SqlDialect>::text_type(),
-                            }
-                        };
+                        let sql_type = #field_sql_type_exprs;
                         cols.push(format!("{} {}", #field_names, sql_type));
                     }
                 )*
@@ -485,62 +683,106 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 vec![ #( #field_names.to_string() ),* ]
             }
 
-            async fn save<'a, E>(&mut self, executor: E) -> Result<(), premix_orm::sqlx::Error>
+            fn sensitive_fields() -> &'static [&'static str] {
+                &[ #( #sensitive_field_literals ),* ]
+            }
+
+            fn save<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
             {
+                async move {
                 let mut executor = executor.into_executor();
                 use premix_orm::ModelHooks;
                 self.before_save().await?;
 
                 // Filter out 'id' and 'version' for INSERT
-                let columns: Vec<&str> = vec![ #( #field_names ),* ]
-                    .into_iter()
-                    .filter(|&c| {
-                        if c == "id" { return self.id != 0; }
-                        true
-                    })
-                    .collect();
+                const ALL_COLUMNS: [&str; #field_idents_len] = [#( #field_names ),*];
+                const NO_ID_COLUMNS: [&str; #field_names_no_id_len] = [#( #field_names_no_id ),*];
+                let columns: &[&str] = if self.id == 0 { &NO_ID_COLUMNS } else { &ALL_COLUMNS };
+                let column_list: &str = if self.id == 0 { #no_id_columns_joined } else { #all_columns_joined };
+                let placeholders = premix_orm::build_placeholders::<DB>(1, columns.len());
 
-                let placeholders = (1..=columns.len())
-                    .map(|i| <DB as premix_orm::SqlDialect>::placeholder(i))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let supports_returning = <DB as premix_orm::SqlDialect>::supports_returning();
+                if supports_returning {
+                    let sql = format!(
+                        "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
+                        #table_name,
+                        column_list,
+                        placeholders
+                    );
 
-                let sql = format!("INSERT INTO {} ({}) VALUES ({})", #table_name, columns.join(", "), placeholders);
+                    premix_orm::tracing::debug!(
+                        operation = "insert",
+                        table = #table_name,
+                        sql = %sql,
+                        "premix query"
+                    );
 
-                let mut query = premix_orm::sqlx::query::<DB>(&sql);
-
-                // Bind only non-id/version fields
-                #(
-                    if #field_names != "id" {
-                        query = query.bind(&self.#field_idents);
-                    } else {
-                        if self.id != 0 {
+                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(&sql);
+                    #(
+                        if #field_names != "id" {
+                            query = query.bind(&self.#field_idents);
+                        } else if self.id != 0 {
                             query = query.bind(&self.id);
                         }
+                    )*
+
+                    if let Some((id,)) = executor.fetch_optional(query).await? {
+                        self.id = id;
                     }
-                )*
+                } else {
+                    let sql = format!(
+                        "INSERT INTO {} ({}) VALUES ({})",
+                        #table_name,
+                        column_list,
+                        placeholders
+                    );
 
-                let result = executor.execute(query).await?;
+                    premix_orm::tracing::debug!(
+                        operation = "insert",
+                        table = #table_name,
+                        sql = %sql,
+                        "premix query"
+                    );
 
-                // Sync the ID from Database
-                let last_id = <DB as premix_orm::SqlDialect>::last_insert_id(&result);
-                if last_id > 0 {
-                     self.id = last_id as i32;
+                    let mut query = premix_orm::sqlx::query::<DB>(&sql);
+                    #(
+                        if #field_names != "id" {
+                            query = query.bind(&self.#field_idents);
+                        } else if self.id != 0 {
+                            query = query.bind(&self.id);
+                        }
+                    )*
+
+                    let result = executor.execute(query).await?;
+                    let last_id = <DB as premix_orm::SqlDialect>::last_insert_id(&result);
+                    if last_id > 0 {
+                        self.id = last_id as i32;
+                    }
                 }
 
                 self.after_save().await?;
                 Ok(())
+                }
             }
 
             #update_impl
             #delete_impl
 
-            async fn find_by_id<'a, E>(executor: E, id: i32) -> Result<Option<Self>, premix_orm::sqlx::Error>
+            fn find_by_id<'a, E>(
+                executor: E,
+                id: i32,
+            ) -> impl ::std::future::Future<Output = Result<Option<Self>, premix_orm::sqlx::Error>>
+            + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
             {
+                async move {
                 let mut executor = executor.into_executor();
                 let p = <DB as premix_orm::SqlDialect>::placeholder(1);
                 let mut where_clause = format!("WHERE id = {}", p);
@@ -548,32 +790,179 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     where_clause.push_str(" AND deleted_at IS NULL");
                 }
                 let sql = format!("SELECT * FROM {} {} LIMIT 1", #table_name, where_clause);
+                premix_orm::tracing::debug!(
+                    operation = "select",
+                    table = #table_name,
+                    sql = %sql,
+                    "premix query"
+                );
                 let query = premix_orm::sqlx::query_as::<DB, Self>(&sql).bind(id);
 
                 executor.fetch_optional(query).await
+                }
             }
 
-            async fn eager_load<'a, E>(models: &mut [Self], relation: &str, executor: E) -> Result<(), premix_orm::sqlx::Error>
-            where
-                E: premix_orm::IntoExecutor<'a, DB = DB>
+            fn eager_load<'a>(
+                models: &mut [Self],
+                relation: &str,
+                executor: premix_orm::Executor<'a, DB>,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>> + Send
             {
-                let mut executor = executor.into_executor();
-                #eager_load_body
+                async move {
+                    let mut executor = executor;
+                    #eager_load_body
+                }
             }
         }
 
         #hooks_impl
         #validation_impl
+
+        impl premix_orm::ModelSchema for #struct_name {
+            fn schema() -> premix_orm::schema::SchemaTable {
+                let columns = vec![
+                    #(
+                        premix_orm::schema::SchemaColumn {
+                            name: #field_names.to_string(),
+                            sql_type: #field_sql_types.to_string(),
+                            nullable: #field_nullables,
+                            primary_key: #field_primary_keys,
+                        }
+                    ),*
+                ];
+                let indexes = vec![
+                    #(#index_tokens),*
+                ];
+                let foreign_keys = vec![
+                    #(#foreign_key_tokens),*
+                ];
+                premix_orm::schema::SchemaTable {
+                    name: #table_name.to_string(),
+                    columns,
+                    indexes,
+                    foreign_keys,
+                    create_sql: None,
+                }
+            }
+        }
     })
 }
 
-fn is_ignored(field: &Field) -> bool {
+fn has_premix_field_flag(field: &Field, flag: &str) -> bool {
     for attr in &field.attrs {
         if attr.path().is_ident("premix")
             && let Ok(meta) = attr.parse_args::<syn::Ident>()
-            && meta == "ignore"
+            && meta == flag
         {
             return true;
+        }
+    }
+    false
+}
+
+fn is_ignored(field: &Field) -> bool {
+    has_premix_field_flag(field, "ignore")
+}
+
+fn is_sensitive(field: &Field) -> bool {
+    has_premix_field_flag(field, "sensitive")
+}
+
+struct IndexSpec {
+    name: String,
+    columns: Vec<String>,
+    unique: bool,
+}
+
+struct ForeignKeySpec {
+    column: String,
+    ref_table: String,
+    ref_column: String,
+}
+
+fn collect_schema_specs(
+    fields: &syn::punctuated::Punctuated<Field, Token![,]>,
+    table_name: &str,
+) -> syn::Result<(Vec<IndexSpec>, Vec<ForeignKeySpec>)> {
+    let mut indexes = Vec::new();
+    let mut foreign_keys = Vec::new();
+
+    for field in fields {
+        if is_ignored(field) {
+            continue;
+        }
+        let field_name = field
+            .ident
+            .as_ref()
+            .ok_or_else(|| syn::Error::new_spanned(field, "Field must have an ident"))?
+            .to_string();
+
+        for attr in &field.attrs {
+            if !attr.path().is_ident("premix") {
+                continue;
+            }
+
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("index") || meta.path.is_ident("unique") {
+                    let unique = meta.path.is_ident("unique");
+                    let mut name = None;
+                    if meta.input.peek(syn::token::Paren) {
+                        meta.parse_nested_meta(|nested| {
+                            if nested.path.is_ident("name") {
+                                let lit: LitStr = nested.value()?.parse()?;
+                                name = Some(lit.value());
+                                Ok(())
+                            } else {
+                                Err(nested.error("unsupported index option"))
+                            }
+                        })?;
+                    }
+                    let index_name =
+                        name.unwrap_or_else(|| format!("idx_{}_{}", table_name, field_name));
+                    indexes.push(IndexSpec {
+                        name: index_name,
+                        columns: vec![field_name.clone()],
+                        unique,
+                    });
+                } else if meta.path.is_ident("foreign_key") {
+                    let mut ref_table = None;
+                    let mut ref_column = None;
+                    meta.parse_nested_meta(|nested| {
+                        if nested.path.is_ident("table") {
+                            let lit: LitStr = nested.value()?.parse()?;
+                            ref_table = Some(lit.value());
+                            Ok(())
+                        } else if nested.path.is_ident("column") {
+                            let lit: LitStr = nested.value()?.parse()?;
+                            ref_column = Some(lit.value());
+                            Ok(())
+                        } else {
+                            Err(nested.error("unsupported foreign_key option"))
+                        }
+                    })?;
+
+                    let ref_table = ref_table.ok_or_else(|| {
+                        syn::Error::new_spanned(attr, "foreign_key requires table = \"...\"")
+                    })?;
+                    let ref_column = ref_column.unwrap_or_else(|| "id".to_string());
+                    foreign_keys.push(ForeignKeySpec {
+                        column: field_name.clone(),
+                        ref_table,
+                        ref_column,
+                    });
+                }
+                Ok(())
+            })?;
+        }
+    }
+
+    Ok((indexes, foreign_keys))
+}
+
+fn is_option_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(path) = ty {
+        if let Some(seg) = path.path.segments.last() {
+            return seg.ident == "Option";
         }
     }
     false
@@ -591,4 +980,78 @@ fn has_premix_flag(attrs: &[Attribute], flag: &str) -> bool {
         }
     }
     false
+}
+
+fn type_name_for_field(ty: &syn::Type) -> Option<String> {
+    if let syn::Type::Path(path) = ty {
+        let segment = path.path.segments.last()?;
+        let ident = segment.ident.to_string();
+        if ident == "Option" {
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                for arg in args.args.iter() {
+                    if let syn::GenericArgument::Type(inner) = arg {
+                        return type_name_for_field(inner);
+                    }
+                }
+            }
+            None
+        } else if ident == "Vec" {
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                    if let Some(inner_ident) = type_name_for_field(inner) {
+                        return Some(format!("Vec<{}>", inner_ident));
+                    }
+                }
+            }
+            Some("Vec".to_string())
+        } else {
+            Some(ident)
+        }
+    } else {
+        None
+    }
+}
+
+fn sql_type_for_field(name: &str, ty: &syn::Type) -> &'static str {
+    let type_name = type_name_for_field(ty);
+    match type_name.as_deref() {
+        Some("i8" | "i16" | "i32" | "isize" | "u8" | "u16" | "u32" | "usize") => "INTEGER",
+        Some("i64" | "u64") => "BIGINT",
+        Some("f32" | "f64") => "REAL",
+        Some("bool") => "BOOLEAN",
+        Some("String" | "str") => "TEXT",
+        Some("Uuid" | "DateTime" | "NaiveDateTime" | "NaiveDate") => "TEXT",
+        Some("Vec<u8>") => "BLOB",
+        _ => {
+            if name == "id" || name.ends_with("_id") {
+                "INTEGER"
+            } else {
+                "TEXT"
+            }
+        }
+    }
+}
+
+fn sql_type_expr_for_field(name: &str, ty: &syn::Type) -> proc_macro2::TokenStream {
+    let type_name = type_name_for_field(ty);
+    match type_name.as_deref() {
+        Some("i8" | "i16" | "i32" | "isize" | "u8" | "u16" | "u32" | "usize") => {
+            quote! { <DB as premix_orm::SqlDialect>::int_type() }
+        }
+        Some("i64" | "u64") => quote! { <DB as premix_orm::SqlDialect>::bigint_type() },
+        Some("f32" | "f64") => quote! { <DB as premix_orm::SqlDialect>::float_type() },
+        Some("bool") => quote! { <DB as premix_orm::SqlDialect>::bool_type() },
+        Some("String" | "str") => quote! { <DB as premix_orm::SqlDialect>::text_type() },
+        Some("Uuid" | "DateTime" | "NaiveDateTime" | "NaiveDate") => {
+            quote! { <DB as premix_orm::SqlDialect>::text_type() }
+        }
+        Some("Vec<u8>") => quote! { <DB as premix_orm::SqlDialect>::blob_type() },
+        _ => {
+            if name == "id" || name.ends_with("_id") {
+                quote! { <DB as premix_orm::SqlDialect>::int_type() }
+            } else {
+                quote! { <DB as premix_orm::SqlDialect>::text_type() }
+            }
+        }
+    }
 }

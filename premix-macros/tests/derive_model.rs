@@ -98,7 +98,11 @@ async fn derive_model_relations_work() {
             posts: None,
         },
     ];
-    <User as PremixModel<Sqlite>>::eager_load(&mut users, "posts", &pool)
+    <User as PremixModel<Sqlite>>::eager_load(
+        &mut users,
+        "posts",
+        premix_core::Executor::Pool(&pool),
+    )
         .await
         .unwrap();
     assert_eq!(users[0].posts.as_ref().unwrap().len(), 1);

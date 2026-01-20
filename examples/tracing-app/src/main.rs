@@ -1,4 +1,4 @@
-use premix_core::Model;
+use premix_core::{Model, Premix};
 use premix_macros::Model;
 use tracing::info;
 
@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting Tracing App...");
 
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
     sqlx::query(&<Product as Model<sqlx::Sqlite>>::create_table_sql())
         .execute(&pool)
         .await?;
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Instrument Find
     let found = Product::find_in_pool(&pool)
-        .filter("price > 10")
+        .filter_gt("price", 10)
         .all()
         .await?;
     info!("Found {} products", found.len()); // Should show "Executing SELECT ALL"

@@ -27,7 +27,7 @@ struct AppState {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A. Setup Database
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
     // B. Auto Migration (The Magic)
     println!(">> Starting Premix Auto-Migration...");

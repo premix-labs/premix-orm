@@ -1,6 +1,5 @@
 use premix_core::{Executor, Model, Premix};
 use premix_macros::Model;
-use sqlx::SqlitePool;
 
 #[derive(Model, Debug, Default, Clone)]
 struct User {
@@ -11,7 +10,7 @@ struct User {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
     // 1. Sync Schema
     Premix::sync::<sqlx::Sqlite, User>(&pool).await?;
@@ -44,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("User successfully hidden from find_by_id");
 
     // 6. Verify with QueryBuilder (default should filter out)
-    let found_qb = User::find_in_pool(&pool).filter("id = 1").all().await?;
+    let found_qb = User::find_in_pool(&pool).filter_eq("id", 1).all().await?;
     assert!(
         found_qb.is_empty(),
         "QueryBuilder should exclude soft deleted records by default"
@@ -54,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 7. Verify with QueryBuilder + with_deleted()
     let found_with_deleted = User::find_in_pool(&pool)
         .with_deleted()
-        .filter("id = 1")
+        .filter_eq("id", 1)
         .all()
         .await?;
     assert!(

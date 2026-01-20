@@ -8,7 +8,7 @@ struct User {
 
 #[tokio::test]
 async fn transactions_flow() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 
     let mut tx = pool.begin().await?;

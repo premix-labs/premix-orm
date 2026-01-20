@@ -1,7 +1,15 @@
-use std::{fs, io::Write, path::Path, process::Command, str::FromStr};
+use std::{
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+    str::FromStr,
+};
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
+#[cfg(feature = "sqlite")]
+use premix_core::schema;
 use premix_core::{Migration, Migrator};
 #[cfg(feature = "postgres")]
 use sqlx::postgres::PgPoolOptions;
@@ -26,10 +34,43 @@ enum Commands {
         #[arg(short, long)]
         database: Option<String>,
     },
+    /// Diff or generate migrations from local models
+    Schema {
+        #[command(subcommand)]
+        action: SchemaAction,
+    },
     /// Manage database migrations
     Migrate {
         #[command(subcommand)]
         action: MigrateAction,
+    },
+    /// Generate Rust models from an existing database
+    Scaffold {
+        #[arg(short, long)]
+        database: Option<String>,
+        /// Limit to a single table
+        #[arg(short, long)]
+        table: Option<String>,
+        /// Output path for generated Rust structs
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum SchemaAction {
+    /// Diff database schema against local models
+    Diff {
+        #[arg(short, long)]
+        database: Option<String>,
+    },
+    /// Generate a migration from schema diff
+    Migrate {
+        #[arg(short, long)]
+        database: Option<String>,
+        /// Output path for the migration file
+        #[arg(short, long)]
+        out: Option<PathBuf>,
     },
 }
 
@@ -75,6 +116,30 @@ async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 ),
             }
         }
+        Commands::Schema { action } => match action {
+            SchemaAction::Diff { database } => {
+                let db_url = resolve_db_url(database);
+                println!(">> Connecting to {}...", db_url);
+                match run_schema_diff(&db_url)? {
+                    true => println!("[OK] Schema diff complete."),
+                    false => println!(
+                        "[WARN] No premix-schema binary found. Create src/bin/premix-schema.rs to enable CLI schema diff."
+                    ),
+                }
+            }
+            SchemaAction::Migrate { database, out } => {
+                let db_url = resolve_db_url(database);
+                println!(">> Connecting to {}...", db_url);
+                match run_schema_migrate(&db_url, out)? {
+                    Some(path) => {
+                        println!("[OK] Schema migration created: {}", path.to_string_lossy());
+                    }
+                    None => println!(
+                        "[WARN] No premix-schema binary found. Create src/bin/premix-schema.rs to enable CLI schema migrations."
+                    ),
+                }
+            }
+        },
         Commands::Migrate { action } => match action {
             MigrateAction::Create { name } => {
                 let dir_path = Path::new("migrations");
@@ -105,9 +170,222 @@ async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 println!("[OK] Last migration reverted.");
             }
         },
+        Commands::Scaffold {
+            database,
+            table,
+            out,
+        } => {
+            let db_url = resolve_db_url(database);
+            println!(">> Connecting to {}...", db_url);
+            let output = run_scaffold(&db_url, table.as_deref()).await?;
+            if let Some(out_path) = out {
+                let mut file = fs::File::create(&out_path)?;
+                file.write_all(output.as_bytes())?;
+                println!("[OK] Scaffold written to {}", out_path.to_string_lossy());
+            } else {
+                println!("{}", output);
+            }
+        }
     }
 
     Ok(())
+}
+
+fn to_pascal_case(name: &str) -> String {
+    let mut out = String::new();
+    for part in name.split('_').filter(|p| !p.is_empty()) {
+        let mut chars = part.chars();
+        if let Some(first) = chars.next() {
+            out.push_str(&first.to_uppercase().to_string());
+            out.push_str(&chars.as_str().to_lowercase());
+        }
+    }
+    out
+}
+
+fn singularize(name: &str) -> &str {
+    if name.ends_with('s') && name.len() > 1 {
+        &name[..name.len() - 1]
+    } else {
+        name
+    }
+}
+
+fn rust_type_for_sql(sql_type: &str, nullable: bool) -> String {
+    let sql_type = sql_type.to_ascii_lowercase();
+    let base = if sql_type.contains("int") && !sql_type.contains("big") {
+        "i32".to_string()
+    } else if sql_type.contains("bigint") || sql_type.contains("int8") {
+        "i64".to_string()
+    } else if sql_type.contains("bool") {
+        "bool".to_string()
+    } else if sql_type.contains("real")
+        || sql_type.contains("double")
+        || sql_type.contains("numeric")
+        || sql_type.contains("decimal")
+        || sql_type.contains("float")
+    {
+        "f64".to_string()
+    } else {
+        "String".to_string()
+    };
+
+    if nullable && base != "String" {
+        format!("Option<{}>", base)
+    } else if nullable && base == "String" {
+        "Option<String>".to_string()
+    } else {
+        base
+    }
+}
+
+#[cfg(feature = "postgres")]
+fn postgres_base_rust_type(data_type: &str) -> String {
+    let t = data_type.to_ascii_lowercase();
+    if t.contains("int2") || t.contains("int4") || t == "integer" || t == "smallint" {
+        "i32".to_string()
+    } else if t.contains("int8") || t == "bigint" {
+        "i64".to_string()
+    } else if t.contains("bool") {
+        "bool".to_string()
+    } else if t.contains("double")
+        || t.contains("float8")
+        || t.contains("real")
+        || t.contains("float4")
+        || t.contains("numeric")
+        || t.contains("decimal")
+    {
+        "f64".to_string()
+    } else if t.contains("bytea") {
+        "Vec<u8>".to_string()
+    } else {
+        "String".to_string()
+    }
+}
+
+#[cfg(feature = "postgres")]
+fn rust_type_for_postgres(data_type: &str, udt_name: &str, nullable: bool) -> String {
+    let data_type = data_type.to_ascii_lowercase();
+    let udt_name = udt_name.to_ascii_lowercase();
+
+    let (base, is_array) = if data_type == "array" {
+        let base = udt_name.trim_start_matches('_');
+        (postgres_base_rust_type(base), true)
+    } else if data_type == "user-defined" {
+        (postgres_base_rust_type(&udt_name), false)
+    } else {
+        (postgres_base_rust_type(&data_type), false)
+    };
+
+    let rust_type = if is_array {
+        format!("Vec<{}>", base)
+    } else {
+        base
+    };
+
+    if nullable {
+        format!("Option<{}>", rust_type)
+    } else {
+        rust_type
+    }
+}
+
+async fn run_scaffold(
+    db_url: &str,
+    table: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if db_url.starts_with("postgres://") || db_url.starts_with("postgresql://") {
+        #[cfg(feature = "postgres")]
+        {
+            let pool = PgPoolOptions::new().connect(db_url).await?;
+            return scaffold_postgres(&pool, table).await;
+        }
+        #[cfg(not(feature = "postgres"))]
+        {
+            return Err(
+                "Postgres support is not enabled. Rebuild premix-cli with --features postgres."
+                    .into(),
+            );
+        }
+    }
+
+    #[cfg(feature = "sqlite")]
+    {
+        let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
+        let pool = SqlitePool::connect_with(options).await?;
+        return scaffold_sqlite(&pool, table).await;
+    }
+
+    #[cfg(not(feature = "sqlite"))]
+    {
+        Err("SQLite support is not enabled. Rebuild premix-cli with --features sqlite.".into())
+    }
+}
+
+#[cfg(feature = "sqlite")]
+async fn scaffold_sqlite(
+    pool: &SqlitePool,
+    table: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let tables = schema::introspect_sqlite_schema(pool).await?;
+    let tables = tables
+        .into_iter()
+        .filter(|t| table.map(|name| name == t.name).unwrap_or(true))
+        .collect::<Vec<_>>();
+
+    let mut out = String::from("use premix_orm::prelude::*;\n\n");
+    for table in tables {
+        let struct_name = to_pascal_case(singularize(&table.name));
+        out.push_str("#[derive(Model, Debug)]\n");
+        out.push_str(&format!("struct {} {{\n", struct_name));
+        for col in table.columns {
+            let rust_type = rust_type_for_sql(&col.sql_type, col.nullable);
+            out.push_str(&format!("    {}: {},\n", col.name, rust_type));
+        }
+        out.push_str("}\n\n");
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "postgres")]
+async fn scaffold_postgres(
+    pool: &sqlx::PgPool,
+    table: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let tables: Vec<String> = if let Some(name) = table {
+        vec![name.to_string()]
+    } else {
+        sqlx::query_scalar(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name",
+        )
+        .fetch_all(pool)
+        .await?
+    };
+
+    let mut out = String::from("use premix_orm::prelude::*;\n\n");
+    for table_name in tables {
+        let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+            "SELECT column_name, data_type, udt_name, is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position",
+        )
+        .bind(&table_name)
+        .fetch_all(pool)
+        .await?;
+
+        if rows.is_empty() {
+            continue;
+        }
+
+        let struct_name = to_pascal_case(singularize(&table_name));
+        out.push_str("#[derive(Model, Debug)]\n");
+        out.push_str(&format!("struct {} {{\n", struct_name));
+        for (col_name, data_type, udt_name, is_nullable) in rows {
+            let nullable = is_nullable.eq_ignore_ascii_case("YES");
+            let rust_type = rust_type_for_postgres(&data_type, &udt_name, nullable);
+            out.push_str(&format!("    {}: {},\n", col_name, rust_type));
+        }
+        out.push_str("}\n\n");
+    }
+    Ok(out)
 }
 
 fn resolve_db_url(database: Option<String>) -> String {
@@ -301,6 +579,98 @@ fn run_sync(db_url: &str) -> Result<bool, Box<dyn std::error::Error>> {
     }
 
     Ok(true)
+}
+
+fn run_schema_diff(db_url: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let schema_entry = Path::new("src/bin/premix-schema.rs");
+    if !schema_entry.exists() {
+        return Ok(false);
+    }
+
+    let output = Command::new("cargo")
+        .args(["run", "--quiet", "--bin", "premix-schema", "--", "diff"])
+        .env("DATABASE_URL", db_url)
+        .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("premix-schema diff failed: {}", stderr.trim()).into());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    print!("{}", stdout);
+    Ok(true)
+}
+
+fn run_schema_migrate(
+    db_url: &str,
+    out: Option<PathBuf>,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let schema_entry = Path::new("src/bin/premix-schema.rs");
+    if !schema_entry.exists() {
+        return Ok(None);
+    }
+
+    let output = Command::new("cargo")
+        .args(["run", "--quiet", "--bin", "premix-schema", "--", "migrate"])
+        .env("DATABASE_URL", db_url)
+        .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("premix-schema migrate failed: {}", stderr.trim()).into());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let sql = stdout.trim();
+    if sql.is_empty() {
+        return Err("premix-schema migrate returned empty SQL output.".into());
+    }
+
+    let path = if let Some(path) = out {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+        write_schema_migration_file(sql, &path)?;
+        path
+    } else {
+        let dir_path = Path::new("migrations");
+        create_schema_migration_file(sql, dir_path)?
+    };
+
+    Ok(Some(path))
+}
+
+fn create_schema_migration_file(
+    sql: &str,
+    dir_path: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if !dir_path.exists() {
+        fs::create_dir(dir_path)?;
+        println!(">> Created 'migrations' directory.");
+    }
+
+    let timestamp = Utc::now().format("%Y%m%d%H%M%S");
+    let filename = format!("{}_schema_diff.sql", timestamp);
+    let file_path = dir_path.join(&filename);
+    write_schema_migration_file(sql, &file_path)?;
+    Ok(file_path)
+}
+
+fn write_schema_migration_file(
+    sql: &str,
+    file_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut file = fs::File::create(file_path)?;
+    let content = format!(
+        "-- Migration: schema_diff\n-- Created at: {}\n\n-- up\n{}\n\n-- down\n-- TODO: add down migration\n",
+        Utc::now(),
+        sql.trim()
+    );
+    file.write_all(content.as_bytes())?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -559,6 +929,48 @@ mod tests {
     }
 
     #[test]
+    fn cli_parses_schema_diff() {
+        let cli = Cli::try_parse_from(["premix", "schema", "diff", "--database", "sqlite:dev.db"])
+            .unwrap();
+        match cli.command {
+            Commands::Schema { action } => match action {
+                SchemaAction::Diff { database } => {
+                    assert_eq!(database.as_deref(), Some("sqlite:dev.db"));
+                }
+                _ => panic!("expected schema diff"),
+            },
+            _ => panic!("expected schema command"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_schema_migrate_with_out() {
+        let cli = Cli::try_parse_from([
+            "premix",
+            "schema",
+            "migrate",
+            "--database",
+            "sqlite:dev.db",
+            "--out",
+            "migrations/20260101000000_schema.sql",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Schema { action } => match action {
+                SchemaAction::Migrate { database, out } => {
+                    assert_eq!(database.as_deref(), Some("sqlite:dev.db"));
+                    assert_eq!(
+                        out.unwrap().to_string_lossy(),
+                        "migrations/20260101000000_schema.sql"
+                    );
+                }
+                _ => panic!("expected schema migrate"),
+            },
+            _ => panic!("expected schema command"),
+        }
+    }
+
+    #[test]
     fn cli_parses_migrate_create() {
         let cli = Cli::try_parse_from(["premix", "migrate", "create", "create_users"]).unwrap();
         match cli.command {
@@ -672,6 +1084,19 @@ mod tests {
         run_cli(Cli {
             command: Commands::Sync {
                 database: Some("sqlite:dev.db".to_string()),
+            },
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cli_run_schema_diff_ok() {
+        run_cli(Cli {
+            command: Commands::Schema {
+                action: SchemaAction::Diff {
+                    database: Some("sqlite:dev.db".to_string()),
+                },
             },
         })
         .await

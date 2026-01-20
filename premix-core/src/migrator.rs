@@ -58,6 +58,12 @@ impl Migrator<sqlx::Sqlite> {
         // 3. Filter Pending
         for migration in migrations {
             if !applied_versions.contains(&migration.version) {
+                tracing::info!(
+                    operation = "migration_apply",
+                    version = %migration.version,
+                    name = %migration.name,
+                    "premix migration"
+                );
                 println!(
                     "🚚 Applying migration: {} - {}",
                     migration.version, migration.name
@@ -123,6 +129,12 @@ impl Migrator<sqlx::Sqlite> {
             return Err("Down migration is empty.".into());
         }
 
+        tracing::info!(
+            operation = "migration_rollback",
+            version = %migration.version,
+            name = %migration.name,
+            "premix migration"
+        );
         tx.execute(migration.down_sql.as_str()).await?;
         sqlx::query("DELETE FROM _premix_migrations WHERE version = ?")
             .bind(&migration.version)
@@ -163,6 +175,12 @@ impl Migrator<sqlx::Postgres> {
         // 3. Filter Pending
         for migration in migrations {
             if !applied_versions.contains(&migration.version) {
+                tracing::info!(
+                    operation = "migration_apply",
+                    version = %migration.version,
+                    name = %migration.name,
+                    "premix migration"
+                );
                 println!(
                     "🚚 Applying migration: {} - {}",
                     migration.version, migration.name
@@ -230,6 +248,12 @@ impl Migrator<sqlx::Postgres> {
             return Err("Down migration is empty.".into());
         }
 
+        tracing::info!(
+            operation = "migration_rollback",
+            version = %migration.version,
+            name = %migration.name,
+            "premix migration"
+        );
         tx.execute(migration.down_sql.as_str()).await?;
         sqlx::query("DELETE FROM _premix_migrations WHERE version = $1")
             .bind(&migration.version)

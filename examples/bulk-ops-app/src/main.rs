@@ -1,7 +1,6 @@
 use premix_core::{Model, Premix};
 use premix_macros::Model;
 use serde_json::json;
-use sqlx::SqlitePool;
 
 #[derive(Debug, Model, Clone)]
 struct User {
@@ -13,7 +12,7 @@ struct User {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
     // Sync table
     Premix::sync::<sqlx::Sqlite, User>(&pool).await?;
@@ -38,14 +37,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Users 6, 7, 8, 9, 10 have age 60..100
     let start = std::time::Instant::now();
     let updated = User::find_in_pool(&pool)
-        .filter("age > 50")
+        .filter_gt("age", 50)
         .update(json!({ "status": "banned" }))
         .await?;
     println!("Updated {} users in {:?}.", updated, start.elapsed());
     assert_eq!(updated, 5);
 
     let banned_count = User::find_in_pool(&pool)
-        .filter("status = 'banned'")
+        .filter_eq("status", "banned")
         .all()
         .await?
         .len();
@@ -55,7 +54,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n--- Test 2: Bulk Delete (Delete where id <= 3) ---");
     // Users 1, 2, 3
     let start_del = std::time::Instant::now();
-    let deleted = User::find_in_pool(&pool).filter("id <= 3").delete().await?;
+    let deleted = User::find_in_pool(&pool)
+        .filter_lte("id", 3)
+        .delete()
+        .await?;
     println!("Deleted {} users in {:?}.", deleted, start_del.elapsed());
     assert_eq!(deleted, 3);
 

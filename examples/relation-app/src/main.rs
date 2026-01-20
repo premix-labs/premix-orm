@@ -1,6 +1,5 @@
-use premix_core::Model;
+use premix_core::{Model, Premix};
 use premix_macros::Model;
-use sqlx::SqlitePool;
 
 // 1. Parent Model
 #[derive(Model)]
@@ -21,7 +20,7 @@ struct Post {
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
-    let pool = SqlitePool::connect("sqlite::memory:").await?;
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
     // A. Sync Tables
     sqlx::query(&<User as Model<sqlx::Sqlite>>::create_table_sql())
