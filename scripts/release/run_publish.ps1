@@ -1,7 +1,7 @@
-$ErrorActionPreference = "Stop"
 param(
     [switch]$AutoConfirm
 )
+$ErrorActionPreference = "Stop"
 $sw = [Diagnostics.Stopwatch]::StartNew()
 
 function Write-Header {
