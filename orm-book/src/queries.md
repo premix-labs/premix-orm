@@ -15,7 +15,7 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let user = User::find_by_id(&pool, 1).await?;
 # Ok(())
@@ -36,10 +36,10 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let users = User::find_in_pool(&pool)
-    .filter("age > 18")
+    .filter_gt("age", 18)
     .limit(20)
     .offset(0)
     .all()
@@ -50,7 +50,9 @@ let users = User::find_in_pool(&pool)
 
 ### Supported Methods
 
-- `filter("...")`: Adds raw SQL to the `WHERE` clause.
+- `filter_eq/lt/lte/gt/gte/like/in/is_null/is_not_null(...)`: Safe filters with bound values.
+- `filter("...")`: Adds raw SQL to the `WHERE` clause (unsafe for user input; requires `.allow_unsafe()`).
+- `filter_raw("...")`: Explicit raw SQL filter (same as `filter`, requires `.allow_unsafe()`).
 - `limit(n)` / `offset(n)`: Pagination.
 - `include("relation")`: Eager-load relations (see Relations chapter).
 - `with_deleted()`: Include soft-deleted rows.
@@ -60,8 +62,35 @@ let users = User::find_in_pool(&pool)
 
 ## Filters and Safety
 
-`filter()` accepts raw SQL fragments. This keeps the builder fast and small,
-but it also means **you are responsible for SQL safety**. Prefer:
+Prefer the parameterized filter helpers (`filter_eq`, `filter_gt`, etc.) when
+values come from users. Raw filters are still available, but they are unsafe
+for untrusted input and require an explicit `.allow_unsafe()` flag.
+
+Example with bound parameters:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+#[derive(Model)]
+struct User {
+    id: i32,
+    age: i32,
+}
+
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
+# Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
+let rows = User::find_in_pool(&pool)
+    .filter_gte("age", 18)
+    .all()
+    .await?;
+# Ok(())
+# }
+```
+
+Raw filters (`filter`/`filter_raw`) accept SQL fragments. This keeps the builder
+fast and small, but it also means **you are responsible for SQL safety** and must
+explicitly opt in with `.allow_unsafe()`. Prefer:
 
 - Static filters where values are trusted.
 - Raw SQL queries for parameter binding when values are user-provided.
@@ -78,9 +107,32 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let rows = User::raw_sql("SELECT * FROM users WHERE age > 18")
+    .fetch_all(&pool)
+    .await?;
+# Ok(())
+# }
+```
+
+## Raw Struct Mapping
+
+For reporting queries that do not map to a model, use `Premix::raw(...).fetch_as::<T>()`:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+#[derive(sqlx::FromRow)]
+struct ReportRow {
+    status: String,
+    count: i64,
+}
+
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
+let rows = Premix::raw("SELECT status, COUNT(*) as count FROM users GROUP BY status")
+    .fetch_as::<premix_orm::sqlx::Sqlite, ReportRow>()
     .fetch_all(&pool)
     .await?;
 # Ok(())
@@ -104,7 +156,7 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let users = User::find_in_pool(&pool)
     .with_deleted()

@@ -80,8 +80,72 @@ struct User {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_url = std::env::var("DATABASE_URL")?;
-    let pool = premix_orm::sqlx::SqlitePool::connect(&db_url).await?;
+    let pool = Premix::smart_sqlite_pool(&db_url).await?;
     Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
+    Ok(())
+}
+```
+
+## Scaffold (Experimental)
+
+Generate Rust models from an existing database:
+
+```bash
+premix scaffold --database sqlite:my_app.db
+premix scaffold --database postgres://localhost/app --table users --out src/models.rs
+```
+
+The output includes `#[derive(Model)]` structs with basic column type mapping.
+Review and refine types or add relation fields as needed.
+
+## Schema Diff (SQLite/Postgres v1)
+
+You can diff the database against your local models and generate a migration
+file. These commands require a `src/bin/premix-schema.rs` binary that uses
+`premix_core::schema`.
+
+```bash
+premix schema diff --database sqlite:my_app.db
+premix schema migrate --database sqlite:my_app.db --out migrations/20260101000000_schema.sql
+premix schema diff --database postgres://localhost/my_app
+premix schema migrate --database postgres://localhost/my_app --out migrations/20260101000000_schema.sql
+```
+
+Example `src/bin/premix-schema.rs`:
+
+```rust,no_run
+use premix_orm::prelude::*;
+use premix_orm::schema;
+use premix_orm::schema_models;
+
+#[derive(Model)]
+struct User {
+    id: i32,
+    name: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let db_url = std::env::var("DATABASE_URL")?;
+    let expected = schema_models![User];
+    if db_url.starts_with("postgres://") || db_url.starts_with("postgresql://") {
+        let pool = Premix::smart_postgres_pool(&db_url).await?;
+        let diff = schema::diff_postgres_schema(&pool, &expected).await?;
+        println!("{}", schema::format_schema_diff_summary(&diff));
+        let sql = schema::postgres_migration_sql(&expected, &diff).join("\n");
+        if !sql.trim().is_empty() {
+            println!("{}", sql);
+        }
+        return Ok(());
+    }
+
+    let pool = Premix::smart_sqlite_pool(&db_url).await?;
+    let diff = schema::diff_sqlite_schema(&pool, &expected).await?;
+    println!("{}", schema::format_schema_diff_summary(&diff));
+    let sql = schema::sqlite_migration_sql(&expected, &diff).join("\n");
+    if !sql.trim().is_empty() {
+        println!("{}", sql);
+    }
     Ok(())
 }
 ```

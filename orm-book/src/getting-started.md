@@ -3,11 +3,16 @@
 This chapter walks through a minimal but complete setup: dependencies, model
 definition, connection, schema sync, and a simple query.
 
+## Requirements
+
+- Rust 1.85+ (edition 2024).
+- No nightly toolchain required.
+
 ## 1. Add Dependencies
 
 ```toml
 [dependencies]
-premix-orm = "1.0.5-alpha"
+premix-orm = "1.0.6-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -18,7 +23,7 @@ serde = { version = "1", features = ["derive"] }
 Enable the database features you need on both `premix-orm` and `sqlx`:
 
 ```toml
-premix-orm = { version = "1.0.5-alpha", features = ["postgres"] }
+premix-orm = { version = "1.0.6-alpha", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
@@ -44,7 +49,7 @@ struct User {
 use premix_orm::prelude::*;
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Ok(())
 # }
 ```
@@ -56,7 +61,7 @@ use premix_orm::prelude::*;
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 # let database_url = "postgres://localhost/app";
-let pool = premix_orm::sqlx::PgPool::connect(&database_url).await?;
+let pool = Premix::smart_postgres_pool(&database_url).await?;
 # Ok(())
 # }
 ```
@@ -73,7 +78,7 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 # Ok(())
 # }
@@ -95,13 +100,13 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let mut user = User { id: 0, name: "Alice".to_string() };
 user.save(&pool).await?;
 
 let users = User::find_in_pool(&pool)
-    .filter("name = 'Alice'")
+    .filter_eq("name", "Alice")
     .all()
     .await?;
 # Ok(())
@@ -133,5 +138,5 @@ premix migrate up
 - Enable database features on both `premix-orm` and `sqlx`.
 - The CLI reads `DATABASE_URL` or defaults to `sqlite:premix.db`.
 - `premix migrate down` reverts the most recent migration.
-- `filter()` accepts raw SQL strings; use carefully to avoid injection.
+- `filter()`/`filter_raw()` accept raw SQL strings and require `.allow_unsafe()`; use carefully to avoid injection.
 

@@ -83,7 +83,7 @@ struct Post {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 let users = User::find_in_pool(&pool)
@@ -97,6 +97,44 @@ let users = User::find_in_pool(&pool)
 Premix batches related rows using a `WHERE IN (...)` query and attaches the
 results to the `posts` field.
 
+### Belongs To Eager Loading
+
+You can also eager load a parent relation by annotating the field:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+#[derive(Model)]
+struct User {
+    id: i32,
+    name: String,
+}
+
+#[derive(Model)]
+struct Post {
+    id: i32,
+    user_id: i32,
+
+    #[belongs_to(User)]
+    #[premix(ignore)]
+    user: Option<User>,
+}
+```
+
+Then call:
+
+```rust,no_run
+# async fn example(pool: premix_orm::sqlx::SqlitePool) -> Result<(), sqlx::Error> {
+let posts = Post::find_in_pool(&pool)
+    .include("user")
+    .all()
+    .await?;
+# Ok(())
+# }
+```
+
+Note: the parent model should implement `Clone` when using eager `belongs_to`.
+
 ## Avoiding N+1
 
 **Lazy** (N+1 queries):
@@ -105,7 +143,7 @@ results to the `posts` field.
 use premix_orm::prelude::*;
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # let users: Vec<User> = Vec::new();
 for user in users {
     let _posts = user.posts_lazy(&pool).await?;
@@ -138,7 +176,7 @@ struct Post {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 let users = User::find_in_pool(&pool)
@@ -154,6 +192,7 @@ let users = User::find_in_pool(&pool)
 - `belongs_to(User)` expects a `user_id` field on the child model.
 - Eager loading requires a `#[premix(ignore)]` field to store the relation.
 - The relation name passed to `include("...")` must match the field name.
+ - Eager `belongs_to` requires the parent model to be `Clone`.
 
 If you need complex joins or custom projections, use raw SQL and map results
 manually.

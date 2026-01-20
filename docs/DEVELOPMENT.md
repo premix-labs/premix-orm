@@ -50,44 +50,47 @@
 **Mission:** Avoid manual SQL for schema changes.
 - [x] Schema introspection & diff engine.
 - [x] `Premix::sync()` capability.
+  - SQLite v1: tables/columns/types/nullability/pk/indexes/foreign keys diff and SQL generation.
+  - Postgres v1: tables/columns/types/nullability/pk/indexes/foreign keys diff and SQL generation.
 
 ### Phase 3: Relations and Optimization - ✅ COMPLETED
 **Mission:** Solve N+1 and provide fluent queries.
 - [x] Relation macros (`has_many`, `belongs_to`).
 - [x] Eager loading (`.include()`) with O(1) query strategy.
+  - Eager loading supports both has_many and belongs_to.
 
-### Phase 4: Developer Experience (DX) - 🔄 UPDATED
+### Phase 4: Developer Experience (DX) - ✅ COMPLETED
 **Mission:** Make the ORM usable, testable, and adoptable.
 - [x] CLI tool (`premix-cli`).
 - [x] Documentation and examples.
 - [x] Macro error handling.
-- [ ] Test Utilities (New):
-  - [ ] Transactional tests (auto-rollback after each test case).
-  - [ ] MockDatabase helper.
-- [ ] Database Scaffolding (New):
-  - [ ] `premix-cli scaffold`: Generate Rust structs from an existing database.
-- [ ] Framework Integrations (New):
-  - [ ] Official helpers: `premix-axum`, `premix-actix`.
+- [x] Test Utilities (New):
+  - [x] Transactional tests (auto-rollback after each test case).
+  - [x] MockDatabase helper.
+- [x] Database Scaffolding (New):
+  - [x] `premix-cli scaffold`: Generate Rust structs from an existing database.
+- [x] Framework Integrations (New):
+  - [x] Official helpers: `premix-axum`, `premix-actix`.
 
-### Phase 5: Enterprise Standard - 🔄 UPDATED
+### Phase 5: Enterprise Standard - ✅ COMPLETED
 **Mission:** Support real-world complexity, security, and reporting.
 - [x] Observability (`tracing`).
 - [x] ACID transactions & lifecycle hooks.
 - [x] Optimistic locking & validation.
-- [ ] Arbitrary Struct Mapping (New):
-  - [ ] `Premix::raw("...").fetch_as::<ReportStruct>()`.
-- [ ] Sensitive Data Masking (New):
-  - [ ] `#[premix(sensitive)]` attribute to redact data in logs.
-- [ ] Smart Configuration (New):
-  - [ ] Auto-tune pool settings based on environment detection.
+- [x] Arbitrary Struct Mapping (New):
+  - [x] `Premix::raw("...").fetch_as::<ReportStruct>()`.
+- [x] Sensitive Data Masking (New):
+  - [x] `#[premix(sensitive)]` attribute to redact data in logs.
+- [x] Smart Configuration (New):
+  - [x] Auto-tune pool settings based on environment detection.
 
 ### Phase 6: The Versatility - 🔄 UPDATED
 **Mission:** Remove limitations and ensure safety.
 - [x] Multi-database architecture (SQLite, Postgres, MySQL).
 - [x] Soft deletes.
 - [x] Bulk operations (`update_all`, `delete_all`).
-- [ ] Destructive Guards (New):
-  - [ ] Prevent `delete_all()` without `.filter()` or `.allow_unsafe()`.
+- [x] Destructive Guards (New):
+  - [x] Prevent `delete_all()` without `.filter()` or `.allow_unsafe()`.
 
 ### Phase 7: DevOps (Versioned Migrations) - ✅ COMPLETED
 **Mission:** Support team workflows and release readiness. Target: v1.0.0 RC.
@@ -99,7 +102,7 @@
 - [ ] Read/write splitting (primary + replicas).
 - [ ] Connection resolver for multi-tenancy.
 - [ ] Metrics collection (New):
-  - [ ] Pool stats (idle/active) and query latency for Prometheus/Grafana.
+  - [x] Pool stats (idle/active) and query latency for Prometheus/Grafana.
 
 ### Phase 9: Advanced Relations - ⏳ DEFERRED
 **Mission:** Support advanced modeling.

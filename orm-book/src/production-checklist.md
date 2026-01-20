@@ -22,6 +22,7 @@ Use this list to sanity check a deployment.
 - Enable `tracing` in your application if you want query timing visibility.
 - Log slow queries and review them regularly.
 - Capture failed queries and migration errors in logs.
+- Export metrics (pool stats and query latency) for dashboards and alerts.
 
 ## Safety and Consistency
 

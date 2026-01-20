@@ -7,14 +7,14 @@ Premix supports SQLite, Postgres, and MySQL through `sqlx`.
 SQLite is enabled by default. Enable other databases explicitly:
 
 ```toml
-premix-orm = { version = "1.0.5-alpha", features = ["postgres"] }
+premix-orm = { version = "1.0.6-alpha", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
 For MySQL:
 
 ```toml
-premix-orm = { version = "1.0.5-alpha", features = ["mysql"] }
+premix-orm = { version = "1.0.6-alpha", features = ["mysql"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "mysql"] }
 ```
 
@@ -27,12 +27,29 @@ use premix_orm::prelude::*;
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 # let database_url = "postgres://localhost/app";
-let sqlite = premix_orm::sqlx::SqlitePool::connect("sqlite:app.db").await?;
-let pg = premix_orm::sqlx::PgPool::connect(&database_url).await?;
+let sqlite = Premix::smart_sqlite_pool("sqlite:app.db").await?;
+let pg = Premix::smart_postgres_pool(&database_url).await?;
 let mysql = premix_orm::sqlx::MySqlPool::connect(&database_url).await?;
 # Ok(())
 # }
 ```
+
+## Smart Pool Configuration
+
+Premix can auto-tune pool settings for server vs serverless environments:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+let sqlite = Premix::smart_sqlite_pool("sqlite:app.db").await?;
+let pg = Premix::smart_postgres_pool("postgres://localhost/app").await?;
+# Ok(())
+# }
+```
+
+Set `PREMIX_ENV=serverless` to force serverless tuning. The default profile is
+`Server` when no environment hints are present.
 
 ## SqlDialect
 

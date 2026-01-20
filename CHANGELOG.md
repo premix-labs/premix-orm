@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.5-alpha] - 2026-01-19
+## [1.0.6-alpha] - 2026-01-20
 
 > Note: Versions 1.0.0–1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
 
@@ -16,6 +16,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs:** Book now documents CLI sync and migrate down, plus updated hooks/validation guidance.
 - **Docs:** Added a dedicated `orm-book/book-examples` compile-check crate and validation notes.
 - **Benchmarks:** Added `scripts/bench/bench_repeat.ps1` to run repeatable multi-round benchmarks and save artifacts.
+- **Schema:** Added SQLite schema diff engine with index/foreign key metadata and summary helpers.
+- **Schema:** Added Postgres schema diff/migration support with indexes and foreign keys.
+- **Schema CLI:** Added `premix schema diff/migrate` via `premix-schema` helper.
+- **Query Builder:** Added parameterized filter helpers and null-check filters.
+- **Relations:** Added eager loading for `belongs_to`.
+- **Macros:** Added `schema_models!` and model schema metadata for indexes/foreign keys.
+- **Tests:** Added coverage for schema diff, eager belongs_to, and delete_all guard paths.
+- **Test Utils:** Added transactional test helper and MockDatabase.
+- **Security:** Added `#[premix(sensitive)]` to redact sensitive values in query logs.
+- **Safety:** Guarded `delete_all()` to require filters unless `allow_unsafe()` is set.
+- **Reporting:** Added `Premix::raw(...).fetch_as::<T>()` for arbitrary struct mapping.
+- **Smart Config:** Added auto-tuned pool options and smart pool helpers for SQLite/Postgres.
+- **CLI:** Added `premix scaffold` to generate models from SQLite/Postgres schemas.
+- **CLI:** Improved Postgres scaffolding type mapping (arrays, bytea, numeric).
+- **Integrations:** Added helper crates `premix-axum` and `premix-actix`.
+- **Metrics:** Added query latency hooks and pool stats recorder with Prometheus exporter.
+- **Safety:** Raw SQL filters now require an explicit `.allow_unsafe()` opt-in.
+- **Postgres:** `save()` now uses `RETURNING id` to sync primary keys reliably.
+- **Schema:** Type inference now uses Rust field types for SQL metadata generation.
+- **Performance:** Macro-generated SQL uses precomputed column lists and shared placeholder builder.
+
+### Breaking
+- **Async Traits:** Switched to `fn -> impl Future + Send` in traits for zero-overhead APIs and removed `async-trait`.
+- **Eager Loading:** `Model::eager_load` now accepts `Executor` directly instead of `IntoExecutor`.
+
+### Changed
+- **CLI:** Added database selection for `premix migrate down`.
+- **CLI:** Feature-gated Postgres support and updated compatibility notes.
+- **Tests:** Expanded CLI and migrator tests to cover rollback flows.
+- **Macros:** `#[derive(Model)]` now emits `premix-orm` paths; direct macro users must depend on `premix-orm`.
+- **Benchmarks:** Standardized Criterion config (warmup/measurement/sample size) across SQLite and Postgres benches.
+- **Docs:** Updated benchmark methodology/results and recorded multi-round median summaries.
+- **Docs:** Updated flowplan to the Ultimate Edition and aligned README/Philosophy checklist.
+- **Docs:** Updated examples and guides to prefer parameterized filters and document new schema/index/fk features.
+- **Relations:** Eager loading now deduplicates IDs, chunks IN queries, and logs missing relations via tracing.
+
+## [1.0.5-alpha] - 2026-01-19
+
+> Note: Versions 1.0.0ƒ?"1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
+
+### Added
+- **Migrations:** Implemented `migrate down` with rollback support for SQLite and Postgres.
+- **CLI Sync:** `premix sync` now runs a `src/bin/premix-sync.rs` helper when present.
+- **Hooks/Validation:** Added opt-in custom hooks/validation via `#[premix(custom_hooks, custom_validation)]`.
+- **Docs:** Book now documents CLI sync and migrate down, plus updated hooks/validation guidance.
+- **Docs:** Added a dedicated `orm-book/book-examples` compile-check crate and validation notes.
+- **Benchmarks:** Added `scripts/bench/bench_repeat.ps1` to run repeatable multi-round benchmarks and save artifacts.
+- **Safety:** Guarded `delete_all()` to require filters unless `allow_unsafe()` is set.
 
 ### Changed
 - **CLI:** Added database selection for `premix migrate down`.

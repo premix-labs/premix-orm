@@ -1,6 +1,6 @@
 [package]
 name = "premix-orm"
-version = "1.0.5-alpha"
+version = "1.0.6-alpha"
 edition = "2024"
 description = "Alpha research ORM for Rust. Facade crate for premix-core and premix-macros (not production-ready)."
 license = "MIT"
@@ -14,10 +14,11 @@ default = ["sqlite"]
 sqlite = ["premix-core/sqlite"]
 postgres = ["premix-core/postgres"]
 mysql = ["premix-core/mysql"]
+metrics = ["premix-core/metrics"]
 
 [dependencies]
-premix-core = { version = "1.0.5-alpha", path = "../premix-core" }
-premix-macros = { version = "1.0.5-alpha", path = "../premix-macros" }
+premix-core = { version = "1.0.6-alpha", path = "../premix-core" }
+premix-macros = { version = "1.0.6-alpha", path = "../premix-macros" }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

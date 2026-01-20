@@ -37,6 +37,7 @@ We provide categorized PowerShell scripts in `scripts/` to standardize testing:
 | **Transactions** | `cargo run -p transaction-app` | ACID compliance test (commit/rollback). |
 | **Hooks** | `cargo run -p hooks-app` | Verify `before_save` / `after_save` triggers. |
 | **Observability** | `cargo run -p tracing-app` | Check structured logging output. |
+| **Metrics** | `cargo run -p tracing-app` | Confirm query latency metrics emit when enabled. |
 
 ## 4. Data Integrity and Validation
 
@@ -51,6 +52,26 @@ We provide categorized PowerShell scripts in `scripts/` to standardize testing:
 |----------|---------|-------------|
 | **Soft Deletes** | `cargo run -p soft-delete-app` | Verify `deleted_at` behavior. |
 | **Bulk Ops** | `cargo run -p bulk-ops-app` | Test `update_all` and `delete_all`. |
+
+## Test Utilities
+
+Use these helpers to simplify transactional tests and ephemeral databases:
+
+```rust
+use premix_orm::prelude::*;
+
+# async fn example() -> Result<(), sqlx::Error> {
+let mock = MockDatabase::new_sqlite().await?;
+
+with_test_transaction(mock.pool(), |conn| {
+    Box::pin(async move {
+        // Use conn for test setup and assertions.
+        Ok(())
+    })
+}).await?;
+# Ok(())
+# }
+```
 
 ## Internal Unit Tests
 

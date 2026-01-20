@@ -17,10 +17,10 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let updated = User::find_in_pool(&pool)
-    .filter("age > 18")
+    .filter_gt("age", 18)
     .update(json!({ "status": "active" }))
     .await?;
 # Ok(())
@@ -47,10 +47,10 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let removed = User::find_in_pool(&pool)
-    .filter("status = 'banned'")
+    .filter_eq("status", "banned")
     .delete()
     .await?;
 # Ok(())
@@ -79,7 +79,7 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let all = User::find_in_pool(&pool)
     .with_deleted()

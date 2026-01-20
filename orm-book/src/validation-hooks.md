@@ -23,13 +23,16 @@ struct User {
     name: String,
 }
 
-#[premix_orm::async_trait::async_trait]
 impl premix_orm::ModelHooks for User {
-    async fn before_save(&mut self) -> Result<(), premix_orm::sqlx::Error> {
-        if self.name.trim().is_empty() {
-            return Err(premix_orm::sqlx::Error::Protocol("name is empty".into()));
+    fn before_save(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<(), premix_orm::sqlx::Error>> + Send {
+        async move {
+            if self.name.trim().is_empty() {
+                return Err(premix_orm::sqlx::Error::Protocol("name is empty".into()));
+            }
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -60,7 +63,7 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let mut user = User { id: 0, name: "Alice".to_string() };
 assert!(user.validate().is_ok());
@@ -84,7 +87,7 @@ struct User {
 }
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-# let pool = premix_orm::sqlx::SqlitePool::connect("sqlite::memory:").await?;
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 let mut user = User { id: 0, name: "Alice".to_string() };
 

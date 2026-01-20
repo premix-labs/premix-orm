@@ -4,7 +4,7 @@
 
 > **"Write Rust, Run Optimized SQL."**
 
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![crates.io](https://img.shields.io/crates/v/premix-orm.svg)](https://crates.io/crates/premix-orm)
@@ -24,6 +24,11 @@ Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need f
 - **Fast like raw `sqlx`**: generated SQL with a minimal runtime layer.
 - **Low ceremony**: `save`, `find`, `include` with a simple model.
 - **Transparent SQL**: inspect `to_sql()` before running anything.
+
+## Requirements
+
+- Rust 1.85+ (edition 2024).
+- No nightly toolchain required.
 
 ## Core Philosophy (Short)
 
@@ -60,20 +65,20 @@ We don't just say we're fast; we prove it.
 TL;DR: Premix is near raw `sqlx` for inserts/selects and dramatically faster
 than loop-based bulk updates in this benchmark suite.
 
-Highlights (median of medians across 3 rounds; see `docs/BENCHMARK_RESULTS.md`):
+Highlights (Criterion medians from the latest run; see `docs/BENCHMARK_RESULTS.md`):
 
-- Insert (1 row): Premix **25.9 us** vs raw SQLx **25.9 us** (~same)
-- Select (1 row): Premix **25.4 us** vs raw SQLx **25.2 us** (~same)
-- Bulk Update (1,000 rows): Premix **62.9 us** vs loop **27.2 ms** (~432x faster)
-- Postgres SELECT: Premix **56.6 us** vs raw SQL **53.1 us** (~same)
+- Insert (1 row): Premix **12.34 us** vs raw SQLx **11.74 us**
+- Select (1 row): Premix **11.16 us** vs raw SQLx **11.25 us** (~same)
+- Bulk Update (1,000 rows): Premix **55.40 us** vs loop **13.38 ms** (~241x faster)
+- Postgres SELECT: Premix **54.49 us** vs raw SQL **54.68 us**
 
 Full results: [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md)
 
 | Operation | Premix | SeaORM | Rbatis | SQLx (Raw) |
 |-----------|--------|--------|--------|------------|
-| **Insert** | **25.9 us** | 39.4 us | 30.6 us | **25.9 us** |
-| **Select** | 25.4 us | 42.9 us | 33.7 us | **25.2 us** |
-| **Bulk Update (1k)** | **62.9 us** | - | - | 27.2 ms* |
+| **Insert** | 12.34 us | 26.97 us | 14.99 us | **11.74 us** |
+| **Select** | **11.16 us** | 19.83 us | 14.49 us | 11.25 us |
+| **Bulk Update (1k)** | **55.40 us** | - | - | 13.38 ms* |
 
 *> Compared to standard loop-based updates.*
 
@@ -121,6 +126,7 @@ premix migrate up
 
 ## Quick Start
 
+
 ### 1. Define Your Model
 ```rust
 use premix_orm::prelude::*;
@@ -135,22 +141,29 @@ struct User {
     #[premix(ignore)]
     posts: Option<Vec<Post>>,
 }
+
+#[derive(Model)]
+struct Post {
+    id: i32,
+    user_id: i32,
+    title: String,
+}
 ```
 
 ### 2. Auto-Sync Schema
 ```rust
 // Connect to SQLite (or Postgres!)
-let pool = SqlitePool::connect("sqlite::memory:").await?;
+let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
 // This line creates tables automatically.
-Premix::sync::<User, _>(&pool).await?;
+Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 ```
 
 ### 3. Fluent Querying (No N+1)
 ```rust
 let users = User::find_in_pool(&pool)
     .include("posts")      // Eager load posts efficiently
-    .filter("age > 18")    // Safe raw SQL filter
+    .filter_gt("age", 18)    // Safe parameterized filter
     .limit(20)
     .all()
     .await?;
@@ -167,7 +180,7 @@ cd premix-demo
 
 ```toml
 [dependencies]
-premix-orm = "1.0.5-alpha"
+premix-orm = "1.0.6-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -177,6 +190,45 @@ Use the code from Quick Start and run:
 
 ```bash
 cargo run
+```
+
+If you want a copy-pasteable `src/main.rs`, use:
+
+```rust
+use premix_orm::prelude::*;
+
+#[derive(Model)]
+struct User {
+    id: i32,
+    name: String,
+
+    #[has_many(Post)]
+    #[premix(ignore)]
+    posts: Option<Vec<Post>>,
+}
+
+#[derive(Model)]
+struct Post {
+    id: i32,
+    user_id: i32,
+    title: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
+    Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
+    Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
+
+    let users = User::find_in_pool(&pool)
+        .include("posts")
+        .filter_gt("id", 0)
+        .all()
+        .await?;
+
+    println!("Loaded {} users", users.len());
+    Ok(())
+}
 ```
 
 Prefer a template? Start from `examples/basic-app` and modify as needed.
@@ -200,15 +252,28 @@ Release notes live in [CHANGELOG.md](CHANGELOG.md), and the development roadmap 
 
 ![Premix vs Typical ORM Flow](assets/premix-orm-flow-compare.svg)
 
+## What `#[derive(Model)]` Generates
+
+- `table_name()`, `create_table_sql()`, `list_columns()`
+- CRUD helpers (`save`, `find_by_id`, `update`, `delete`)
+- Query builder entry points (`find_in_pool`, `find_in_tx`)
+- Relation helpers (`has_many`, `belongs_to`) and eager loading (`include`)
+
+See [orm-book/models.md](orm-book/src/models.md) and
+[orm-book/queries.md](orm-book/src/queries.md) for the generated API surface and
+SQL inspection helpers.
+
 ## Advanced Features
 
 ### Soft Deletes
 Never accidentally lose data again.
 ```rust
+use premix_orm::prelude::*;
+
 #[derive(Model)] // <--- Auto-detected by field name!
 struct User {
     id: i32,
-    deleted_at: Option<DateTime<Utc>>,
+    deleted_at: Option<String>,
 }
 
 // Logical delete (sets deleted_at)
@@ -224,9 +289,12 @@ let all = User::find_in_pool(&pool).with_deleted().all().await?;
 ### Bulk Operations
 Update thousands of rows in microseconds.
 ```rust
+use premix_orm::prelude::*;
+use serde_json::json;
+
 // Set all inactive users to 'archived' status
 User::find_in_pool(&pool)
-    .filter("last_login < '2023-01-01'")
+    .filter_lt("last_login", "2023-01-01")
     .update(json!({ "status": "archived" }))
     .await?; 
 // Time: ~50us (Lightning fast!)
@@ -235,7 +303,7 @@ User::find_in_pool(&pool)
 ### SQL Transparency
 Inspect the SQL generated by the query builder.
 ```rust
-let query = User::find_in_pool(&pool).filter("age > 18").limit(10);
+let query = User::find_in_pool(&pool).filter_gt("age", 18).limit(10);
 println!("{}", query.to_sql());
 ```
 
@@ -265,7 +333,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = "1.0.5-alpha"
+premix-orm = "1.0.6-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -276,11 +344,37 @@ serde = { version = "1", features = ["derive"] }
 - **Feature flags**: enable database features on both `premix-orm` and `sqlx`.
 - **`DATABASE_URL`**: CLI uses it by default; pass `--database` if needed.
 - **`migrate down`**: requires a valid `-- down` section in your migration file.
+- **Bulk update examples**: add `serde_json` if you use `json!` helpers.
+
+## Performance Tuning
+
+- Use `include()` for N+1 avoidance and prefer batched bulk updates when possible.
+- Inspect SQL with `to_sql()`/`to_update_sql()` and keep filters parameterized.
+- Tune pool sizes via `Premix::smart_*_pool_with_profile` in production.
+
+## Deployment and CI
+
+- Use versioned SQL migrations for production environments.
+- In CI/Docker, run `premix migrate up` before application start.
+- See [orm-book/migrations.md](orm-book/src/migrations.md) and
+  [orm-book/production-checklist.md](orm-book/src/production-checklist.md).
+
+## Comparisons (High-Level)
+
+- **Premix vs Diesel:** Premix favors runtime simplicity and transparent SQL; Diesel offers
+  a richer compile-time query DSL with more compile-time overhead.
+- **Premix vs SeaORM:** Premix trades some dynamic query flexibility for a thinner runtime
+  layer and simpler mental model.
+- **Premix vs raw SQLx:** Premix adds schema/relations conveniences while keeping SQL visible.
 
 ## Compatibility
 
 - Uses the Tokio runtime (async/await).
 - `sqlx` features must match your target database.
+## Limitations
+
+See [orm-book/limitations.md](orm-book/src/limitations.md) for current gaps
+and known constraints.
 
 ## Example App
 

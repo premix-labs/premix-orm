@@ -42,6 +42,31 @@ This is intentionally simple and predictable. The mapping is based on field
 names, not Rust types. For production schemas, prefer explicit migrations for
 full control.
 
+## Indexes and Foreign Keys
+
+You can declare simple indexes and foreign key metadata on fields:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+#[derive(Model)]
+struct User {
+    id: i32,
+
+    #[premix(index)]
+    name: String,
+
+    #[premix(unique(name = "users_email_uidx"))]
+    email: String,
+
+    #[premix(foreign_key(table = "accounts", column = "id"))]
+    account_id: i32,
+}
+```
+
+Index and foreign key metadata is used by schema diff for SQLite. Foreign keys
+are reported as TODOs because SQLite requires table rebuilds for changes.
+
 ## ID Behavior
 
 If your model has an `id` field, Premix treats it as the primary key. When
@@ -67,6 +92,26 @@ struct User {
 ```
 
 Ignored fields are not included in schema generation or SQL statements.
+
+## Sensitive Fields
+
+Mark sensitive columns to redact values in query logs:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+#[derive(Model)]
+struct User {
+    id: i32,
+    email: String,
+
+    #[premix(sensitive)]
+    password: String,
+}
+```
+
+Premix logs `***` for sensitive columns in parameterized filters. Raw filters are
+logged as `RAW(<redacted>)` because they can embed untrusted values.
 
 ## Soft Delete
 
