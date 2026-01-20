@@ -139,6 +139,38 @@ let rows = Premix::raw("SELECT status, COUNT(*) as count FROM users GROUP BY sta
 # }
 ```
 
+## Complex Queries (JOIN, GROUP BY, HAVING)
+
+When you need joins or projections, use `Premix::raw` and map into a struct:
+
+```rust,no_run
+use premix_orm::prelude::*;
+use premix_orm::sqlx;
+
+#[derive(sqlx::FromRow)]
+struct UserPostStats {
+    user_id: i32,
+    post_count: i64,
+}
+
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+# let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
+let sql = r#"
+    SELECT u.id as user_id, COUNT(p.id) as post_count
+    FROM users u
+    JOIN posts p ON p.user_id = u.id
+    GROUP BY u.id
+    HAVING COUNT(p.id) >= 5
+"#;
+
+let rows = Premix::raw(sql)
+    .fetch_as::<premix_orm::sqlx::Sqlite, UserPostStats>()
+    .fetch_all(&pool)
+    .await?;
+# Ok(())
+# }
+```
+
 ## Pagination and Soft Deletes
 
 When `deleted_at` is present on a model:

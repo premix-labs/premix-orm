@@ -30,7 +30,7 @@ runtime to stay as close to raw `sqlx` calls as possible.
 
 ## Prerequisites
 
-- Rust 1.70+ with `cargo`.
+- Rust 1.85+ with `cargo`.
 - Familiarity with async Rust and `tokio`.
 - Basic SQL knowledge (SELECT/INSERT/UPDATE/DELETE).
 

@@ -10,10 +10,12 @@ This section documents current constraints so expectations are clear.
 
 ## Query Builder
 
-- Only `filter`, `limit`, `offset`, `include`, `with_deleted`, `all`, `update`,
-  and `delete` are supported today.
+- Basic filters (`filter_eq`, `filter_gt`, etc.) are supported with bound values.
+- Raw filters (`filter`/`filter_raw`) are supported but require `.allow_unsafe()`.
+- Only `limit`, `offset`, `include`, `with_deleted`, `all`, `update`, and `delete`
+  are supported today.
 - There is no built-in `order_by` or select projection API.
-- Filters are raw SQL fragments; parameter binding is not provided.
+- Use `Premix::raw(...).fetch_as::<T>()` for projections and reporting queries.
 
 ## Relations
 

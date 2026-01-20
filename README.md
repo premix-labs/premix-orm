@@ -137,6 +137,7 @@ use premix_orm::prelude::*;
 struct User {
     id: i32,
     name: String,
+    age: i32,
     
     #[has_many(Post)]
     #[premix(ignore)]
@@ -158,6 +159,7 @@ let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
 
 // This line creates tables automatically.
 Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
+Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 ```
 
 ### 3. Fluent Querying (No N+1)

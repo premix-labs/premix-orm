@@ -41,3 +41,9 @@ Use this list to sanity check a deployment.
 - Back up your database before major schema changes.
 - Monitor connection pool saturation and query latency.
 - Keep release notes and changelog entries aligned.
+
+## Docker and CI
+
+- Install the CLI in your image (`cargo install premix-cli`).
+- Run `premix migrate up` on container start or as a CI step.
+- Ensure `DATABASE_URL` is set in the container or CI environment.
