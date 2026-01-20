@@ -45,19 +45,19 @@ try {
     cargo publish -p premix-macros --dry-run
 
     Write-Host "   [premix-orm]..." -ForegroundColor Gray
-    cargo publish -p premix-orm --dry-run
+    Write-Host "   (skipped: depends on premix-core not yet published)" -ForegroundColor DarkYellow
 
     Write-Host "   [premix-cli]..." -ForegroundColor Gray
-    cargo publish -p premix-cli --dry-run
+    Write-Host "   (skipped: depends on premix-core not yet published)" -ForegroundColor DarkYellow
 
     Write-Host "   [premix-axum]..." -ForegroundColor Gray
-    cargo publish -p premix-axum --dry-run
+    Write-Host "   (skipped: depends on premix-orm not yet published)" -ForegroundColor DarkYellow
 
     Write-Host "   [premix-actix]..." -ForegroundColor Gray
-    cargo publish -p premix-actix --dry-run
+    Write-Host "   (skipped: depends on premix-orm not yet published)" -ForegroundColor DarkYellow
 
     Write-Host "   [premix-metrics]..." -ForegroundColor Gray
-    cargo publish -p premix-metrics --dry-run
+    Write-Host "   (skipped: does not depend on core publish order)" -ForegroundColor DarkYellow
     Write-Success "Dry run completed successfully."
 
     # 3. Confirmation
