@@ -5,7 +5,8 @@ query-building code at compile time, and the SQL strings are assembled at
 runtime to stay as close to raw `sqlx` calls as possible.
 
 > Research status: This project is a research prototype. APIs may change and
-> production use is not recommended yet.
+> production use is not recommended yet. This codebase is AI-assisted and
+> should be treated as experimental.
 
 ## What Premix Optimizes For
 

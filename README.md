@@ -16,6 +16,7 @@ Premix is a **Zero-Overhead, Type-Safe ORM** for Rust that eliminates the need f
 
 > **Status (Alpha / Research Prototype)**  
 > Premix is a research prototype. APIs may change and production use is not recommended yet.  
+> This codebase is an AI-assisted research prototype and should be treated as experimental.  
 > See [DISCLAIMER.md](DISCLAIMER.md).  
 > Note: Versions 1.0.0-1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
 
