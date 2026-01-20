@@ -8,5 +8,5 @@ repository = "https://github.com/premix-labs/premix-orm"
 
 [dependencies]
 actix-web = "4"
-premix-orm = { version = "1.0.6-alpha", path = "../premix-orm" }
+premix-orm = { version = "=1.0.6-alpha", path = "../premix-orm" }
 sqlx = { version = "0.8", default-features = false }

@@ -17,8 +17,8 @@ mysql = ["premix-core/mysql"]
 metrics = ["premix-core/metrics"]
 
 [dependencies]
-premix-core = { version = "1.0.6-alpha", path = "../premix-core" }
-premix-macros = { version = "1.0.6-alpha", path = "../premix-macros" }
+premix-core = { version = "=1.0.6-alpha", path = "../premix-core" }
+premix-macros = { version = "=1.0.6-alpha", path = "../premix-macros" }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
