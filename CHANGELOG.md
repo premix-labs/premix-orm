@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Web Integrations:** Built-in helpers for **Axum** (`PremixState`) and **Actix-web** (`PremixData`) natively in `premix-orm`.
 - **Metrics:** Integrated Prometheus metrics recorder natively into `premix-core`.
+- **Benchmarks:** Added `premix_vs_sqlx` benchmark for direct comparison against raw `sqlx` latency.
+- **Scripts:** Added `scripts/bench/bench_compare.ps1` and `bench_direct.ps1` for convenient benchmark runs.
+- **Build:** Upgraded project to **Rust Edition 2024** with resolver v3.
 
 ### Changed
 
