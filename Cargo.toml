@@ -1,21 +1,20 @@
 [workspace]
+# รายชื่อ Crate ทั้งหมดที่อยู่ในโปรเจกต์นี้ (Workspace Members)
 members = [
-    "premix-core",
-    "premix-macros",
-    "premix-orm",
-    "premix-cli",
-    "premix-actix",
-    "premix-axum",
-    "premix-metrics",
-    "benchmarks",
-    "examples/*",
+    "premix-core",    # Core Engine: จัดการ SQL Logic และ Database Interaction
+    "premix-macros",  # Derive Macros: ส่วนที่ทำ Code Generation (`#[derive(Model)]`)
+    "premix-orm",     # Facade: Crate หลักที่ User จะเรียกใช้งาน (รวม core + macros เข้าด้วยกัน)
+    "premix-cli",     # CLI Tool: เครื่องมือจัดการ Migration และ Scaffolding
+    "benchmarks",     # Performance Testing: ชุดทดสอบความเร็วเทียบกับ ORM อื่น
+    "examples/*",     # Example Apps: รวมตัวอย่างการเขียนโค้ดรูปแบบต่างๆ
 ]
 
-resolver = "3"
+resolver = "3" # ใช้ระบบจัดการ Dependency แบบใหม่ของ Rust (Edition 2024)
 [workspace.lints.clippy]
-all = { level = "warn", priority = -1 }
-unwrap_used = "allow"
-print_stdout = "allow"
-str_to_string = "warn"
-cast_lossless = "warn"
-needless_borrow = "warn"
+# การตั้งค่า Lints (กฎการเขียนโค้ด) ให้เหมือนกันทั้งโปรเจกต์
+all = { level = "warn", priority = -1 } # เปิดใช้งาน Warning พื้นฐานทั้งหมด
+unwrap_used = "allow"      # อนุญาตให้ใช้ .unwrap() (เนื่องจากเป็นรุ่น Alpha/Research)
+print_stdout = "allow"     # อนุญาตให้ใช้ println! (สะดวกสำหรับการ Debug)
+str_to_string = "warn"     # เตือนเมื่อใช้ .to_string() กับ &str (แนะนำให้ใช้ .to_owned())
+cast_lossless = "warn"     # เตือนเมื่อมีการแปลงตัวเลขที่อาจสูญเสียความแม่นยำ
+needless_borrow = "warn"   # เตือนเมื่อมีการยืมตัวแปร (Borrow) โดยไม่จำเป็น

@@ -1,6 +1,6 @@
 [package]
 name = "premix-orm"
-version = "1.0.6-alpha"
+version = "1.0.7-alpha"
 edition = "2024"
 description = "Alpha research ORM for Rust. Facade crate for premix-core and premix-macros (not production-ready)."
 license = "MIT"
@@ -10,15 +10,32 @@ keywords = ["orm", "database", "sql"]
 categories = ["database"]
 
 [features]
-default = ["sqlite"]
-sqlite = ["premix-core/sqlite"]
-postgres = ["premix-core/postgres"]
-mysql = ["premix-core/mysql"]
-metrics = ["premix-core/metrics"]
+default = ["sqlite"] # ค่าเริ่มต้น: ใช้ SQLite (ไม่ต้องลง Driver อื่นๆ)
+
+# Database Support (เลือกเปิดได้ทีละหลายตัว แต่มักใช้แค่ตัวเดียว)
+sqlite = [
+    "premix-core/sqlite",
+] # เปิดใช้งาน SQLite (Embed ในตัว, เหมาะกับ Dev/Mobile)
+postgres = [
+    "premix-core/postgres",
+] # เปิดใช้งาน PostgreSQL (เหมาะกับ Server, Production)
+mysql = ["premix-core/mysql"] # เปิดใช้งาน MySQL / MariaDB
+
+# Web Framework Integrations
+axum = ["dep:axum"]       # เปิดใช้งานฟีเจอร์ Axum Integration
+actix = ["dep:actix-web"] # เปิดใช้งานฟีเจอร์ Actix Integration
+
+# Observability
+metrics = [
+    "premix-core/metrics",
+] # เปิดใช้งานการส่ง Metrics (Prometheus) สำหรับ Pool stats
 
 [dependencies]
-premix-core = { version = "=1.0.6-alpha", path = "../premix-core" }
-premix-macros = { version = "=1.0.6-alpha", path = "../premix-macros" }
+premix-core = { version = "=1.0.7-alpha", path = "../premix-core" }
+premix-macros = { version = "=1.0.7-alpha", path = "../premix-macros" }
+axum = { version = "0.7", optional = true }
+actix-web = { version = "4", optional = true }
+sqlx = { version = "0.8", default-features = false }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

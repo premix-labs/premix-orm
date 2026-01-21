@@ -88,7 +88,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! premix-orm = "1.0.6-alpha"
+//! premix-orm = "1.0.7-alpha"
 //! ```
 //!
 //! ## Book
@@ -98,6 +98,14 @@
 
 pub use premix_core::*;
 pub use premix_macros::Model;
+
+pub mod integrations;
+
+#[cfg(feature = "axum")]
+pub use integrations::axum::*;
+
+#[cfg(feature = "actix")]
+pub use integrations::actix::*;
 
 pub mod prelude {
     pub use premix_core::prelude::*;
