@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Zero-Overhead Macro:** Added `premix_query!` for compile-time SQL generation (0% overhead).
+- **CRUD Macros:** `premix_query!` supports `SELECT`, `INSERT`, `UPDATE`, `DELETE` with compile-time SQL.
 - **Web Integrations:** Built-in helpers for **Axum** (`PremixState`) and **Actix-web** (`PremixData`) natively in `premix-orm`.
 - **Metrics:** Integrated Prometheus metrics recorder natively into `premix-core`.
+- **Benchmarks:** Updated benchmarks showing `premix_query!` matching raw `sqlx` latency exactly.
 - **Benchmarks:** Added `premix_vs_sqlx` benchmark for direct comparison against raw `sqlx` latency.
 - **Scripts:** Added `scripts/bench/bench_compare.ps1` and `bench_direct.ps1` for convenient benchmark runs.
 - **Build:** Upgraded project to **Rust Edition 2024** with resolver v3.

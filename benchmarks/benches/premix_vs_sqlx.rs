@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use premix_orm::prelude::*;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 
@@ -58,11 +58,12 @@ fn bench_premix_vs_sqlx(c: &mut Criterion) {
         b.to_async(&rt).iter(|| {
             let pool = raw_pool.clone();
             async move {
-                let user: User = sqlx::query_as::<_, User>("SELECT id, name, age FROM users WHERE id = ?")
-                    .bind(1)
-                    .fetch_one(&*pool)
-                    .await
-                    .expect("raw fetch");
+                let user: User =
+                    sqlx::query_as::<_, User>("SELECT id, name, age FROM users WHERE id = ?")
+                        .bind(1)
+                        .fetch_one(&*pool)
+                        .await
+                        .expect("raw fetch");
                 std::hint::black_box(user);
             }
         })
@@ -80,6 +81,22 @@ fn bench_premix_vs_sqlx(c: &mut Criterion) {
                     .await
                     .expect("premix fetch");
                 let user = users.pop().expect("one row");
+                std::hint::black_box(user);
+            }
+        })
+    });
+
+    // Zero-Overhead: Compile-time macro (should match raw sqlx)
+    let static_pool = pool.clone();
+    c.bench_function("premix_static_query", |b| {
+        b.to_async(&rt).iter(|| {
+            let pool = static_pool.clone();
+            async move {
+                let user_id = 1i32;
+                let user: User = premix_query!(User, SELECT, filter_eq("id", user_id), limit(1))
+                    .fetch_one(&*pool)
+                    .await
+                    .expect("static fetch");
                 std::hint::black_box(user);
             }
         })

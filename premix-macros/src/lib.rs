@@ -6,6 +6,60 @@ use syn::{
 };
 
 mod relations;
+mod static_query;
+
+/// Compile-time query macro for true Zero-Overhead SQL generation.
+///
+/// This macro generates SQL at compile time, achieving 0% overhead compared to raw sqlx.
+///
+/// # Example
+///
+/// ```ignore
+/// use premix_orm::prelude::*;
+///
+/// // SELECT
+/// let user = premix_query!(User, SELECT, filter_eq("id", 1), limit(1))
+///     .fetch_one(&pool).await?;
+///
+/// // INSERT
+/// let new_user = premix_query!(
+///     User, INSERT,
+///     set("name", "Bob"),
+///     set("age", 30)
+/// ).fetch_one(&pool).await?;
+///
+/// // UPDATE
+/// let updated = premix_query!(
+///     User, UPDATE,
+///     set("age", 31),
+///     filter_eq("name", "Bob")
+/// ).fetch_one(&pool).await?;
+///
+/// // DELETE
+/// let deleted = premix_query!(
+///     User, DELETE,
+///     filter_eq("id", 1)
+/// ).execute(&pool).await?;
+/// ```
+///
+/// # Supported Operations
+///
+/// - `SELECT` - Generate SELECT query
+/// - `INSERT` - Generate INSERT query (with `set` assignments)
+/// - `UPDATE` - Generate UPDATE query (with `set` assignments and filters)
+/// - `DELETE` - Generate DELETE query (with filters)
+///
+/// # Supported Clauses
+///
+/// - `filter_eq/ne/gt/lt/gte/lte("col", val)` - WHERE clause conditions
+/// - `set("col", val)` - SET/VALUES clause for INSERT/UPDATE
+/// - `limit(N)` - LIMIT N
+/// - `offset(N)` - OFFSET N
+#[proc_macro]
+pub fn premix_query(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as static_query::StaticQueryInput);
+    TokenStream::from(static_query::generate_static_query(input))
+}
 
 #[proc_macro_derive(Model, attributes(has_many, belongs_to, premix))]
 pub fn derive_model(input: TokenStream) -> TokenStream {

@@ -98,6 +98,20 @@
 
 pub use premix_core::*;
 pub use premix_macros::Model;
+/// Compile-time query macro for true Zero-Overhead SQL generation.
+///
+/// This macro generates SQL at compile time, achieving 0% overhead compared to raw sqlx.
+///
+/// # Example
+///
+/// ```ignore
+/// use premix_orm::prelude::*;
+///
+/// let user = premix_query!(User, SELECT, filter_eq("id", user_id), limit(1))
+///     .fetch_one(&pool)
+///     .await?;
+/// ```
+pub use premix_macros::premix_query;
 
 pub mod integrations;
 
@@ -110,5 +124,6 @@ pub use integrations::actix::*;
 pub mod prelude {
     pub use premix_core::prelude::*;
 
-    pub use crate::Model; // The macro // The traits and other core items
+    pub use crate::Model; // The macro
+    pub use crate::premix_query; // Zero-overhead compile-time query macro
 }
