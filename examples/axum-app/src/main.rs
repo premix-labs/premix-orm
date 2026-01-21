@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use premix_core::{Model, Premix};
 use premix_macros::Model;

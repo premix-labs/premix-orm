@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     routing::get,
 };
-use premix_metrics::PrometheusHandle;
+use premix_orm::metrics::PrometheusHandle;
 use premix_orm::{Executor, Model, Premix};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
@@ -29,7 +29,7 @@ async fn main() {
     // Initialize Tracing
     tracing_subscriber::fmt::init();
 
-    let metrics = premix_metrics::install_prometheus_recorder()
+    let metrics = premix_orm::metrics::install_prometheus_recorder()
         .expect("Failed to install Prometheus recorder");
 
     // 3. Connect to Database

@@ -31,6 +31,8 @@ try {
 
     $examples = @(
         "basic-app",
+        "axum-app",
+        "premix-axum-tutorial",
         "relation-app",
         "eager-app",
         "transaction-app",

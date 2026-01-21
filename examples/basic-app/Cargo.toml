@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# ดึง SDK ของ Premix มาใช้งานโดยระบุ Path ไปที่โฟลเดอร์ใน Workspace
 premix-core = { path = "../../premix-core" }
 premix-macros = { path = "../../premix-macros" }
 premix-orm = { path = "../../premix-orm" }

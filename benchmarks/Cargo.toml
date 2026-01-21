@@ -12,7 +12,9 @@ postgres = ["premix-core/postgres", "sqlx/postgres"]
 [dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio"] }
-criterion = { version = "0.8.1", features = ["async_tokio"] }
+criterion = { version = "0.8.1", features = [
+    "async_tokio",
+] } # Library สำหรับทำ Micro-benchmarking (วัดความเร็วระดับเสี้ยววินาที)
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 chrono = { version = "0.4", features = ["serde"] }
@@ -22,13 +24,13 @@ premix-core = { path = "../premix-core" }
 premix-macros = { path = "../premix-macros" }
 premix-orm = { path = "../premix-orm" }
 
-# Competitors
+# Competitors (คู่แข่งที่นำมาเปรียบเทียบความเร็ว)
 sea-orm = { version = "1.1.19", features = [
     "sqlx-sqlite",
     "sqlx-postgres",
     "runtime-tokio-native-tls",
 ] }
-rbatis = "4.6.15"
+rbatis = "4.6.15" # ORM จากฝั่งจีนที่เน้นความเร็ว
 rbs = "4.6.0"
 rbdc-sqlite = "4.6.2"
 rbdc-pg = "4.6.3"

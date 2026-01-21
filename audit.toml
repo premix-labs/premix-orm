@@ -1,18 +1,31 @@
 # Audit Configuration for Premix ORM
-# This file allows us to ignore vulnerabilities that are unfixable upstream 
-# or isolated to benchmark/dev dependencies.
+# ไฟล์นี้ใช้สำหรับตั้งค่า `cargo-audit` เพื่อตรวจสอบ Security Vulnerabilities ใน Dependencies
+# เราจำเป็นต้อง Ignore บางรายการที่ยังแก้ไม่ได้ที่ต้นน้ำ (Upstream) หรือเป็นแค่ False Positive ในกรณีของเรา
 
 [advisories]
 ignore = [
-    # Marvin Attack in rsa (via sqlx-mysql). No fixed upgrade available for rsa 0.9.x.
-    # We accept this risk for MySQL support until sqlx updates rsa.
+    # -------------------------------------------------------------------------
+    # 1. Marvin Attack in RSA (RUSTSEC-2023-0071)
+    # -------------------------------------------------------------------------
+    # สาเหตุ: Library `rsa` เวอร์ชันเก่ามีช่องโหว่ Marvin Attack (Timing side-channel)
+    # ที่มา: ถูกใช้โดย `sqlx-mysql` -> `sqlx-core`
+    # ความเสี่ยง: ต่ำมากสำหรับเรา เพราะเราไม่ได้ใช้ RSA ในการเข้ารหัสข้อมูลสำคัญโดยตรง
+    # สถานะ: จำเป็นต้องยอมรับความเสี่ยงนี้ไปก่อน จนกว่า `sqlx` จะอัปเดต dependency
     "RUSTSEC-2023-0071",
 
-    # rustls-pemfile is unmaintained (via rbatis/rbdc). 
-    # Used only in benchmarks.
+    # -------------------------------------------------------------------------
+    # 2. rustls-pemfile Unmaintained (RUSTSEC-2025-0134)
+    # -------------------------------------------------------------------------
+    # สาเหตุ: Library นี้ถูกประกาศว่าเลิก maintain แล้ว
+    # ที่มา: ถูกใช้โดย `rbatis` / `rbdc` (ซึ่งเราใช้แค่ใน Benchmarks เท่านั้น)
+    # ความเสี่ยง: ไม่มีผลกับ Production Code ของ Premix ORM
     "RUSTSEC-2025-0134",
 
-    # lru soundness issue (via rbatis/rbdc).
-    # Used only in benchmarks.
+    # -------------------------------------------------------------------------
+    # 3. LRU Soundness Issue (RUSTSEC-2026-0002)
+    # -------------------------------------------------------------------------
+    # สาเหตุ: พบ Memory Safety issue ใน `lru` crate
+    # ที่มา: ใช้ใน Benchmarks เช่นกัน
+    # ความเสี่ยง: ไม่มีผลกับ Production Code
     "RUSTSEC-2026-0002",
 ]

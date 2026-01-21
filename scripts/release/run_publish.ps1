@@ -53,14 +53,6 @@ try {
     Write-Host "   [premix-cli]..." -ForegroundColor Gray
     Write-Host "   (skipped: depends on premix-core not yet published)" -ForegroundColor DarkYellow
 
-    Write-Host "   [premix-axum]..." -ForegroundColor Gray
-    Write-Host "   (skipped: depends on premix-orm not yet published)" -ForegroundColor DarkYellow
-
-    Write-Host "   [premix-actix]..." -ForegroundColor Gray
-    Write-Host "   (skipped: depends on premix-orm not yet published)" -ForegroundColor DarkYellow
-
-    Write-Host "   [premix-metrics]..." -ForegroundColor Gray
-    Write-Host "   (skipped: does not depend on core publish order)" -ForegroundColor DarkYellow
     Write-Success "Dry run completed successfully."
 
     # 3. Confirmation
@@ -101,9 +93,6 @@ try {
     Write-Host "   https://crates.io/crates/premix-macros"
     Write-Host "   https://crates.io/crates/premix-orm"
     Write-Host "   https://crates.io/crates/premix-cli"
-    Write-Host "   https://crates.io/crates/premix-axum"
-    Write-Host "   https://crates.io/crates/premix-actix"
-    Write-Host "   https://crates.io/crates/premix-metrics"
 }
 catch {
     Write-Host "`n[FAILED] $_" -ForegroundColor Red
