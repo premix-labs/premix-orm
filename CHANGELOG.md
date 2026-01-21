@@ -16,8 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Consolidation:** Merged `premix-axum`, `premix-actix`, and `premix-metrics` into the main crates via Feature Flags to simplify maintenance.
 - **Zero-Overhead:** Refactored `#[derive(Model)]` to use compile-time `concat!` for SQL generation, eliminating heap allocations in the hot path.
+- **Performance:** Pre-allocated `String::with_capacity()` in `build_placeholders()` to avoid reallocations.
+- **Performance:** Pre-allocated `Vec::with_capacity(4)` for filters and `Vec::with_capacity(2)` for includes in `QueryBuilder`.
+- **Performance:** Added `#[inline]` hints on critical hot path functions (`bind_value_query_as`, `build_placeholders`).
+- **Performance:** Eager loading now uses sorted `Vec` with binary search instead of `HashMap` for better L1/L2 cache locality.
+- **Performance:** Wrapped debug tracing in `#[cfg(debug_assertions)]` to eliminate overhead in release builds.
 - **Project Structure**: Major modularization of `premix-core` into `dialect`, `executor`, `model`, and `query` modules.
 - **Docs:** Updated all `Cargo.toml` files with detailed Thai comments for better clarity.
+- **Docs:** Added comprehensive `ZERO_OVERHEAD_AUDIT.md` report validating performance claims.
 
 ## [1.0.6-alpha] - 2026-01-20
 
