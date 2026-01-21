@@ -41,6 +41,10 @@ name = "orm_comparison"
 harness = false
 
 [[bench]]
+name = "premix_vs_sqlx"
+harness = false
+
+[[bench]]
 name = "io_benchmark"
 harness = false
 required-features = ["postgres"]

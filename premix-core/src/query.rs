@@ -40,6 +40,7 @@ fn record_query_metrics(operation: &str, table: &str, elapsed: Duration) {
 #[cfg(not(feature = "metrics"))]
 fn record_query_metrics(_operation: &str, _table: &str, _elapsed: Duration) {}
 
+#[inline(always)]
 fn bind_value_query<'q, DB>(
     query: sqlx::query::Query<'q, DB, <DB as Database>::Arguments<'q>>,
     value: BindValue,
@@ -61,6 +62,7 @@ where
     }
 }
 
+#[inline(always)]
 fn bind_value_query_as<'q, DB, T>(
     query: sqlx::query::QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
     value: BindValue,
@@ -429,6 +431,7 @@ where
     }
 
     // Optimized version that writes to buffer
+    #[inline(always)]
     fn render_where_clause_into(
         &self,
         sql: &mut String,
@@ -531,7 +534,7 @@ where
         sql.push_str("SELECT * FROM ");
         sql.push_str(T::table_name());
 
-        let mut where_binds = Vec::new();
+        let mut where_binds = Vec::with_capacity(self.filters.len());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
         if let Some(limit) = self.limit {
@@ -544,12 +547,15 @@ where
             let _ = write!(sql, " OFFSET {}", offset);
         }
 
+        // Only log in debug builds to avoid overhead in release
+        #[cfg(debug_assertions)]
         tracing::debug!(
             operation = "select",
             sql = %sql,
             filters = %self.format_filters_for_log(),
             "premix query"
         );
+
         let start = Instant::now();
         let mut results: Vec<T> = match &mut self.executor {
             Executor::Pool(pool) => {
