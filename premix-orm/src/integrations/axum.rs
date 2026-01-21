@@ -1,12 +1,14 @@
 use axum::extract::FromRef;
 
 /// Axum state wrapper for Premix pools.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PremixState<DB: sqlx::Database> {
+    /// The database connection pool.
     pub pool: sqlx::Pool<DB>,
 }
 
 impl<DB: sqlx::Database> PremixState<DB> {
+    /// Creates a new `PremixState` with the given pool.
     pub fn new(pool: sqlx::Pool<DB>) -> Self {
         Self { pool }
     }

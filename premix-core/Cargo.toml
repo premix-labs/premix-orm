@@ -27,14 +27,19 @@ metrics = [
 sqlx = { version = "0.8.6", features = [
     "runtime-tokio", # ใช้ระบบ Async ของ Tokio
     "macros",        # เปิดใช้งาน sqlx-macros สำหรับ query! (ถ้าต้องการใช้)
+    "chrono",        # สำหรับ DateTime support ใน sqlx
+    "uuid",          # สำหรับ UUID support ใน sqlx
 ], default-features = false }
 
 tracing = "0.1.44"                                                  # ระบบ Logging แบบโครงสร้าง (Structured Logging)
 serde = "1.0.228"                                                   # ระบบ Serialize/Deserialize ข้อมูล
 serde_json = "1.0.149"                                              # สำหรับจัดการข้อมูล JSON
 chrono = { version = "0.4", features = ["serde"] }                  # จัดการวันและเวลา
+uuid = { version = "1", features = ["serde", "v4"] }                # สำหรับจัดการ UUID
 metrics = { version = "0.22", optional = true }                     # เก็บสถิติความเร็วและการทำงาน (เปิดตาม feature)
 metrics-exporter-prometheus = { version = "0.13", optional = true }
+futures-util = "0.3.31"
+async-stream = "0.3.6"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

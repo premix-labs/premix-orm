@@ -1,12 +1,15 @@
-use std::error::Error;
+use sqlx::{Database, Pool};
 
-use sqlx::{Database, Executor, Pool};
-
+/// A single database migration.
 #[derive(Debug, Clone)]
 pub struct Migration {
+    /// Unique version identifier for the migration (e.g., timestamp).
     pub version: String,
+    /// Human-readable name for the migration.
     pub name: String,
+    /// SQL statement to apply the migration.
     pub up_sql: String,
+    /// SQL statement to revert the migration.
     pub down_sql: String,
 }
 
@@ -15,11 +18,22 @@ struct AppliedMigration {
     version: String,
 }
 
+/// A migration manager for applying and rolling back migrations.
 pub struct Migrator<DB: Database> {
     pool: Pool<DB>,
 }
 
+impl<DB: Database> std::fmt::Debug for Migrator<DB> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Migrator")
+            .field("pool", &"sqlx::Pool")
+            .finish()
+    }
+}
+
 impl<DB: Database> Migrator<DB> {
+    /// Creates a new `Migrator` instance using the provided connection pool.
+    /// Creates a new `Migrator` instance using the provided connection pool.
     pub fn new(pool: Pool<DB>) -> Self {
         Self { pool }
     }
@@ -31,7 +45,11 @@ impl<DB: Database> Migrator<DB> {
 
 #[cfg(feature = "sqlite")]
 impl Migrator<sqlx::Sqlite> {
-    pub async fn run(&self, migrations: Vec<Migration>) -> Result<(), Box<dyn Error>> {
+    /// Executes all pending migrations.
+    pub async fn run(
+        &self,
+        migrations: Vec<Migration>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut tx = self.pool.begin().await?;
 
         // 1. Ensure Table Exists
@@ -46,7 +64,7 @@ impl Migrator<sqlx::Sqlite> {
         .await?;
 
         // 2. Get Applied Versions
-        let applied_versions: Vec<String> = sqlx::query_as::<_, AppliedMigration>(
+        let applied_versions: Vec<String> = sqlx::query_as::<sqlx::Sqlite, AppliedMigration>(
             "SELECT version FROM _premix_migrations ORDER BY version ASC",
         )
         .fetch_all(&mut *tx)
@@ -70,7 +88,7 @@ impl Migrator<sqlx::Sqlite> {
                 );
 
                 // Execute UP SQL
-                tx.execute(migration.up_sql.as_str()).await?;
+                sqlx::query(&migration.up_sql).execute(&mut *tx).await?;
 
                 // Record Version
                 sqlx::query("INSERT INTO _premix_migrations (version, name) VALUES (?, ?)")
@@ -85,7 +103,11 @@ impl Migrator<sqlx::Sqlite> {
         Ok(())
     }
 
-    pub async fn rollback_last(&self, migrations: Vec<Migration>) -> Result<bool, Box<dyn Error>> {
+    /// Reverts the last applied migration.
+    pub async fn rollback_last(
+        &self,
+        migrations: Vec<Migration>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
@@ -109,7 +131,7 @@ impl Migrator<sqlx::Sqlite> {
             "SELECT version FROM _premix_migrations WHERE version IN ({}) ORDER BY version DESC LIMIT 1",
             placeholders
         );
-        let mut query = sqlx::query_scalar::<_, String>(&sql);
+        let mut query = sqlx::query_scalar::<sqlx::Sqlite, String>(&sql);
         for version in &versions {
             query = query.bind(version);
         }
@@ -135,7 +157,7 @@ impl Migrator<sqlx::Sqlite> {
             name = %migration.name,
             "premix migration"
         );
-        tx.execute(migration.down_sql.as_str()).await?;
+        sqlx::query(&migration.down_sql).execute(&mut *tx).await?;
         sqlx::query("DELETE FROM _premix_migrations WHERE version = ?")
             .bind(&migration.version)
             .execute(&mut *tx)
@@ -148,7 +170,11 @@ impl Migrator<sqlx::Sqlite> {
 
 #[cfg(feature = "postgres")]
 impl Migrator<sqlx::Postgres> {
-    pub async fn run(&self, migrations: Vec<Migration>) -> Result<(), Box<dyn Error>> {
+    /// Executes all pending migrations.
+    pub async fn run(
+        &self,
+        migrations: Vec<Migration>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut tx = self.pool.begin().await?;
 
         // 1. Ensure Table Exists
@@ -163,7 +189,7 @@ impl Migrator<sqlx::Postgres> {
         .await?;
 
         // 2. Get Applied Versions
-        let applied_versions: Vec<String> = sqlx::query_as::<_, AppliedMigration>(
+        let applied_versions: Vec<String> = sqlx::query_as::<sqlx::Postgres, AppliedMigration>(
             "SELECT version FROM _premix_migrations ORDER BY version ASC",
         )
         .fetch_all(&mut *tx)
@@ -187,13 +213,7 @@ impl Migrator<sqlx::Postgres> {
                 );
 
                 // Execute UP SQL
-                // Note: splitting by ; might be needed for multiple statements in one file
-                // But for MVP we assume sqlx can handle the string block or user separates properly.
-                // sqlx::execute only runs the first statement for some drivers,
-                // but Executor::execute roughly maps to running the query.
-                // For safety in Postgres with multiple statements, simple Executor::execute might fail if not wrapped or specific support.
-                // We'll trust user provides valid script block for now.
-                tx.execute(migration.up_sql.as_str()).await?;
+                sqlx::query(&migration.up_sql).execute(&mut *tx).await?;
 
                 // Record Version
                 sqlx::query("INSERT INTO _premix_migrations (version, name) VALUES ($1, $2)")
@@ -208,7 +228,11 @@ impl Migrator<sqlx::Postgres> {
         Ok(())
     }
 
-    pub async fn rollback_last(&self, migrations: Vec<Migration>) -> Result<bool, Box<dyn Error>> {
+    /// Reverts the last applied migration.
+    pub async fn rollback_last(
+        &self,
+        migrations: Vec<Migration>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
@@ -227,7 +251,7 @@ impl Migrator<sqlx::Postgres> {
             return Ok(false);
         }
 
-        let last = sqlx::query_scalar::<_, String>(
+        let last = sqlx::query_scalar::<sqlx::Postgres, String>(
             "SELECT version FROM _premix_migrations WHERE version = ANY($1) ORDER BY version DESC LIMIT 1",
         )
         .bind(&versions)
@@ -254,7 +278,7 @@ impl Migrator<sqlx::Postgres> {
             name = %migration.name,
             "premix migration"
         );
-        tx.execute(migration.down_sql.as_str()).await?;
+        sqlx::query(&migration.down_sql).execute(&mut *tx).await?;
         sqlx::query("DELETE FROM _premix_migrations WHERE version = $1")
             .bind(&migration.version)
             .execute(&mut *tx)
@@ -279,14 +303,11 @@ mod tests {
         let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
             "postgres://postgres:admin123@localhost:5432/premix_bench".to_string()
         });
-        match sqlx::postgres::PgPoolOptions::new()
+        sqlx::postgres::PgPoolOptions::new()
             .max_connections(1)
             .connect(&db_url)
             .await
-        {
-            Ok(pool) => Some(pool),
-            Err(_) => None,
-        }
+            .ok()
     }
 
     #[tokio::test]

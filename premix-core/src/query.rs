@@ -1,6 +1,7 @@
 use crate::dialect::SqlDialect;
 use crate::executor::Executor;
 use crate::model::Model;
+use futures_util::StreamExt;
 use sqlx::{Database, IntoArguments};
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,8 @@ pub enum BindValue {
     I64(i64),
     F64(f64),
     Bool(bool),
+    Uuid(uuid::Uuid),
+    DateTime(chrono::DateTime<chrono::Utc>),
     Null,
 }
 
@@ -21,6 +24,8 @@ impl BindValue {
             BindValue::I64(v) => v.to_string(),
             BindValue::F64(v) => v.to_string(),
             BindValue::Bool(v) => v.to_string(),
+            BindValue::Uuid(v) => v.to_string(),
+            BindValue::DateTime(v) => v.to_rfc3339(),
             BindValue::Null => "NULL".to_string(),
         }
     }
@@ -51,6 +56,8 @@ where
     i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     f64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     bool: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    uuid::Uuid: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::DateTime<chrono::Utc>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     Option<String>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     match value {
@@ -58,6 +65,8 @@ where
         BindValue::I64(v) => query.bind(v),
         BindValue::F64(v) => query.bind(v),
         BindValue::Bool(v) => query.bind(v),
+        BindValue::Uuid(v) => query.bind(v),
+        BindValue::DateTime(v) => query.bind(v),
         BindValue::Null => query.bind(Option::<String>::None),
     }
 }
@@ -73,6 +82,8 @@ where
     i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     f64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     bool: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    uuid::Uuid: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::DateTime<chrono::Utc>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     Option<String>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     match value {
@@ -80,6 +91,8 @@ where
         BindValue::I64(v) => query.bind(v),
         BindValue::F64(v) => query.bind(v),
         BindValue::Bool(v) => query.bind(v),
+        BindValue::Uuid(v) => query.bind(v),
+        BindValue::DateTime(v) => query.bind(v),
         BindValue::Null => query.bind(Option::<String>::None),
     }
 }
@@ -129,6 +142,18 @@ impl From<Option<String>> for BindValue {
     }
 }
 
+impl From<uuid::Uuid> for BindValue {
+    fn from(value: uuid::Uuid) -> Self {
+        Self::Uuid(value)
+    }
+}
+
+impl From<chrono::DateTime<chrono::Utc>> for BindValue {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Self::DateTime(value)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum FilterExpr {
     Raw(String),
@@ -143,6 +168,10 @@ pub(crate) enum FilterExpr {
     },
 }
 
+/// A type-safe SQL query builder.
+///
+/// `QueryBuilder` provides a fluent interface for building SELECT, UPDATE, and DELETE queries
+/// with support for filtering, pagination, eager loading, and soft deletes.
 pub struct QueryBuilder<'a, T, DB: Database> {
     executor: Executor<'a, DB>,
     filters: Vec<FilterExpr>,
@@ -155,11 +184,25 @@ pub struct QueryBuilder<'a, T, DB: Database> {
     _marker: std::marker::PhantomData<T>,
 }
 
+impl<'a, T, DB: Database> std::fmt::Debug for QueryBuilder<'a, T, DB> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QueryBuilder")
+            .field("filters", &self.filters)
+            .field("limit", &self.limit)
+            .field("offset", &self.offset)
+            .field("includes", &self.includes)
+            .field("include_deleted", &self.include_deleted)
+            .field("allow_unsafe", &self.allow_unsafe)
+            .finish()
+    }
+}
+
 impl<'a, T, DB> QueryBuilder<'a, T, DB>
 where
     DB: SqlDialect,
     T: Model<DB>,
 {
+    /// Creates a new `QueryBuilder` using the provided [`Executor`].
     pub fn new(executor: Executor<'a, DB>) -> Self {
         Self {
             executor,
@@ -174,16 +217,22 @@ where
         }
     }
 
+    /// Adds a raw SQL filter condition to the query.
+    ///
+    /// # Safety
+    /// This method is potentially unsafe and requires calling [`allow_unsafe`] for the query to execute.
     pub fn filter(mut self, condition: impl Into<String>) -> Self {
         self.filters.push(FilterExpr::Raw(condition.into()));
         self.has_raw_filter = true;
         self
     }
 
+    /// Adds a raw SQL filter condition to the query.
     pub fn filter_raw(self, condition: impl Into<String>) -> Self {
         self.filter(condition)
     }
 
+    /// Adds an equality filter (`column = value`).
     pub fn filter_eq(mut self, column: &str, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.to_string(),
@@ -193,6 +242,7 @@ where
         self
     }
 
+    /// Adds a not-equal filter (`column != value`).
     pub fn filter_ne(mut self, column: &str, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.to_string(),
@@ -202,6 +252,7 @@ where
         self
     }
 
+    /// Adds a less-than filter (`column < value`).
     pub fn filter_lt(mut self, column: &str, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.to_string(),
@@ -211,6 +262,7 @@ where
         self
     }
 
+    /// Adds a less-than-or-equal filter (`column <= value`).
     pub fn filter_lte(mut self, column: &str, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.to_string(),
@@ -220,6 +272,7 @@ where
         self
     }
 
+    /// Adds a greater-than filter (`column > value`).
     pub fn filter_gt(mut self, column: &str, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.to_string(),
@@ -229,6 +282,7 @@ where
         self
     }
 
+    /// Adds a greater-than-or-equal filter (`column >= value`).
     pub fn filter_gte(mut self, column: &str, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.to_string(),
@@ -238,6 +292,7 @@ where
         self
     }
 
+    /// Adds a LIKE filter (`column LIKE value`).
     pub fn filter_like(mut self, column: &str, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.to_string(),
@@ -247,6 +302,7 @@ where
         self
     }
 
+    /// Filters rows where the column IS NULL.
     pub fn filter_is_null(mut self, column: &str) -> Self {
         self.filters.push(FilterExpr::NullCheck {
             column: column.to_string(),
@@ -255,6 +311,7 @@ where
         self
     }
 
+    /// Filters rows where the column IS NOT NULL.
     pub fn filter_is_not_null(mut self, column: &str) -> Self {
         self.filters.push(FilterExpr::NullCheck {
             column: column.to_string(),
@@ -263,6 +320,7 @@ where
         self
     }
 
+    /// Adds an IN filter (`column IN (values...)`).
     pub fn filter_in<I, V>(mut self, column: &str, values: I) -> Self
     where
         I: IntoIterator<Item = V>,
@@ -333,26 +391,34 @@ where
         clauses.join(" AND ")
     }
 
+    /// Limits the number of rows returned by the query.
+    /// Sets the maximum number of rows to return.
     pub fn limit(mut self, limit: i32) -> Self {
         self.limit = Some(limit);
         self
     }
 
+    /// Skips the specified number of rows.
+    /// Sets the number of rows to skip.
     pub fn offset(mut self, offset: i32) -> Self {
         self.offset = Some(offset);
         self
     }
 
+    /// Eager loads a related model.
     pub fn include(mut self, relation: impl Into<String>) -> Self {
         self.includes.push(relation.into());
         self
     }
 
+    /// Includes soft-deleted records in the results.
     pub fn with_deleted(mut self) -> Self {
         self.include_deleted = true;
         self
     }
 
+    /// Explicitly allows potentially unsafe raw filters.
+    /// Enables execution of queries with raw SQL filters.
     pub fn allow_unsafe(mut self) -> Self {
         self.allow_unsafe = true;
         self
@@ -399,7 +465,7 @@ where
                 sql.push_str(", ");
             }
             let p = DB::placeholder(i);
-            let _ = write!(sql, "{} = {}", k, p);
+            let _ = write!(sql, "{} = {}", DB::quote_identifier(k), p);
             i += 1;
             first = false;
         }
@@ -417,8 +483,9 @@ where
         if T::has_soft_delete() {
             let _ = write!(
                 sql,
-                "UPDATE {} SET deleted_at = {}",
+                "UPDATE {} SET {} = {}",
                 T::table_name(),
+                DB::quote_identifier("deleted_at"),
                 DB::current_timestamp_fn()
             );
         } else {
@@ -466,7 +533,7 @@ where
                             continue;
                         }
                         append_and(sql);
-                        let _ = write!(sql, "{} IN (", column);
+                        let _ = write!(sql, "{} IN (", DB::quote_identifier(column));
                         for (i, v) in values.iter().enumerate() {
                             if i > 0 {
                                 sql.push_str(", ");
@@ -478,7 +545,13 @@ where
                         sql.push(')');
                     } else {
                         append_and(sql);
-                        let _ = write!(sql, "{} {} {}", column, op, DB::placeholder(idx));
+                        let _ = write!(
+                            sql,
+                            "{} {} {}",
+                            DB::quote_identifier(column),
+                            op,
+                            DB::placeholder(idx)
+                        );
                         idx += 1;
                         if let Some(v) = values.first() {
                             binds.push(v.clone());
@@ -488,9 +561,9 @@ where
                 FilterExpr::NullCheck { column, is_null } => {
                     append_and(sql);
                     if *is_null {
-                        let _ = write!(sql, "{} IS NULL", column);
+                        let _ = write!(sql, "{} IS NULL", DB::quote_identifier(column));
                     } else {
-                        let _ = write!(sql, "{} IS NOT NULL", column);
+                        let _ = write!(sql, "{} IS NOT NULL", DB::quote_identifier(column));
                     }
                 }
             }
@@ -517,6 +590,8 @@ where
     f64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    uuid::Uuid: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     fn ensure_safe_filters(&self) -> Result<(), sqlx::Error> {
         if self.has_raw_filter && !self.allow_unsafe {
@@ -527,6 +602,11 @@ where
         Ok(())
     }
 
+    /// Executes the query and returns a vector of results.
+    ///
+    /// This method will fetch all rows matching the criteria and then perform
+    /// eager loading for any included relations.
+    #[tracing::instrument(skip(self), fields(table = T::table_name()))]
     pub async fn all(mut self) -> Result<Vec<T>, sqlx::Error> {
         self.ensure_safe_filters()?;
 
@@ -559,17 +639,15 @@ where
         let start = Instant::now();
         let mut results: Vec<T> = match &mut self.executor {
             Executor::Pool(pool) => {
-                let mut query = sqlx::query_as::<DB, T>(&sql);
-                for bind in where_binds {
-                    query = bind_value_query_as(query, bind);
-                }
+                let query = where_binds
+                    .into_iter()
+                    .fold(sqlx::query_as::<DB, T>(&sql), bind_value_query_as);
                 query.fetch_all(*pool).await?
             }
             Executor::Conn(conn) => {
-                let mut query = sqlx::query_as::<DB, T>(&sql);
-                for bind in where_binds {
-                    query = bind_value_query_as(query, bind);
-                }
+                let query = where_binds
+                    .into_iter()
+                    .fold(sqlx::query_as::<DB, T>(&sql), bind_value_query_as);
                 query.fetch_all(&mut **conn).await?
             }
         };
@@ -589,7 +667,63 @@ where
         Ok(results)
     }
 
+    /// Executes the query and returns a stream of results.
+    ///
+    /// This is useful for processing large result sets without loading them all into memory.
+    #[tracing::instrument(skip(self), fields(table = T::table_name()))]
+    pub fn stream(
+        self,
+    ) -> Result<futures_util::stream::BoxStream<'a, Result<T, sqlx::Error>>, sqlx::Error>
+    where
+        T: 'a,
+    {
+        self.ensure_safe_filters()?;
+
+        let mut sql = String::with_capacity(128);
+        sql.push_str("SELECT * FROM ");
+        sql.push_str(T::table_name());
+
+        let mut where_binds = Vec::with_capacity(self.filters.len());
+        self.render_where_clause_into(&mut sql, &mut where_binds, 1);
+
+        if let Some(limit) = self.limit {
+            use std::fmt::Write;
+            let _ = write!(sql, " LIMIT {}", limit);
+        }
+
+        if let Some(offset) = self.offset {
+            use std::fmt::Write;
+            let _ = write!(sql, " OFFSET {}", offset);
+        }
+
+        #[cfg(debug_assertions)]
+        tracing::debug!(
+            operation = "stream",
+            sql = %sql,
+            filters = %self.format_filters_for_log(),
+            "premix query"
+        );
+
+        let executor = self.executor;
+        Ok(Box::pin(async_stream::try_stream! {
+            let mut query = sqlx::query_as::<DB, T>(&sql);
+            for bind in where_binds {
+                query = bind_value_query_as(query, bind);
+            }
+            let mut s = executor.fetch_stream(query);
+            while let Some(row) = s.next().await {
+                yield row?;
+            }
+        }))
+    }
+
+    /// Executes a bulk update based on the current filters.
+    ///
+    /// # Errors
+    /// Returns an error if no filters are provided (unless `allow_unsafe` is used),
+    /// or if the values cannot be mapped to the database.
     #[inline(never)]
+    #[tracing::instrument(skip(self, values), fields(table = T::table_name()))]
     pub async fn update(mut self, values: serde_json::Value) -> Result<u64, sqlx::Error>
     where
         String: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
@@ -597,6 +731,8 @@ where
         f64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
         bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
         Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        uuid::Uuid: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     {
         self.ensure_safe_filters()?;
         if self.filters.is_empty() && !self.allow_unsafe {
@@ -619,7 +755,7 @@ where
                 sql.push_str(", ");
             }
             let p = DB::placeholder(i);
-            let _ = write!(sql, "{} = {}", k, p);
+            let _ = write!(sql, "{} = {}", DB::quote_identifier(k), p);
             i += 1;
             first = false;
         }
@@ -672,6 +808,7 @@ where
         result
     }
 
+    /// Executes a bulk update based on the current filters. Alias for [`update`].
     pub async fn update_all(self, values: serde_json::Value) -> Result<u64, sqlx::Error>
     where
         String: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
@@ -683,6 +820,8 @@ where
         self.update(values).await
     }
 
+    /// Executes a bulk delete based on the current filters.
+    #[tracing::instrument(skip(self), fields(table = T::table_name()))]
     pub async fn delete(mut self) -> Result<u64, sqlx::Error> {
         self.ensure_safe_filters()?;
         if self.filters.is_empty() && !self.allow_unsafe {
@@ -697,8 +836,9 @@ where
         if T::has_soft_delete() {
             let _ = write!(
                 sql,
-                "UPDATE {} SET deleted_at = {}",
+                "UPDATE {} SET {} = {}",
                 T::table_name(),
+                DB::quote_identifier("deleted_at"),
                 DB::current_timestamp_fn()
             );
         } else {
@@ -717,18 +857,16 @@ where
         let start = Instant::now();
         let result = match &mut self.executor {
             Executor::Pool(pool) => {
-                let mut query = sqlx::query::<DB>(&sql);
-                for bind in where_binds {
-                    query = bind_value_query(query, bind);
-                }
+                let query = where_binds
+                    .into_iter()
+                    .fold(sqlx::query::<DB>(&sql), bind_value_query);
                 let res = query.execute(*pool).await?;
                 Ok(DB::rows_affected(&res))
             }
             Executor::Conn(conn) => {
-                let mut query = sqlx::query::<DB>(&sql);
-                for bind in where_binds {
-                    query = bind_value_query(query, bind);
-                }
+                let query = where_binds
+                    .into_iter()
+                    .fold(sqlx::query::<DB>(&sql), bind_value_query);
                 let res = query.execute(&mut **conn).await?;
                 Ok(DB::rows_affected(&res))
             }
@@ -737,7 +875,121 @@ where
         result
     }
 
+    /// Executes a bulk delete based on the current filters. Alias for [`delete`].
     pub async fn delete_all(self) -> Result<u64, sqlx::Error> {
         self.delete().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::Sqlite;
+
+    struct DummyModel;
+
+    impl Model<Sqlite> for DummyModel {
+        fn table_name() -> &'static str {
+            "users"
+        }
+        fn create_table_sql() -> String {
+            String::new()
+        }
+        fn list_columns() -> Vec<String> {
+            vec!["id".to_string()]
+        }
+        async fn save<'a, E>(&'a mut self, _e: E) -> Result<(), sqlx::Error>
+        where
+            E: crate::executor::IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        async fn update<'a, E>(
+            &'a mut self,
+            _e: E,
+        ) -> Result<crate::model::UpdateResult, sqlx::Error>
+        where
+            E: crate::executor::IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(crate::model::UpdateResult::Success)
+        }
+        async fn delete<'a, E>(&'a mut self, _e: E) -> Result<(), sqlx::Error>
+        where
+            E: crate::executor::IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(())
+        }
+        fn has_soft_delete() -> bool {
+            false
+        }
+        async fn find_by_id<'a, E>(_e: E, _id: i32) -> Result<Option<Self>, sqlx::Error>
+        where
+            E: crate::executor::IntoExecutor<'a, DB = Sqlite>,
+        {
+            Ok(None)
+        }
+    }
+
+    // Dummy FromRow implementation for Sqlite
+    impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for DummyModel {
+        fn from_row(_row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+            Ok(DummyModel)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sql_injection_mitigation() {
+        let pool = sqlx::Pool::<Sqlite>::connect_lazy("sqlite::memory:").unwrap();
+        let qb = DummyModel::find_in_pool(&pool);
+
+        // Malicious column name
+        let qb = qb.filter_eq("id; DROP TABLE users; --", 1);
+        let sql = qb.to_sql();
+        println!("SQL select: {}", sql);
+
+        // The column name should be quoted
+        assert!(sql.contains("`id; DROP TABLE users; --` = ?"));
+        assert!(sql.contains("SELECT * FROM users WHERE"));
+    }
+
+    #[tokio::test]
+    async fn test_to_update_sql_quoting() {
+        let pool = sqlx::Pool::<Sqlite>::connect_lazy("sqlite::memory:").unwrap();
+        let qb = DummyModel::find_in_pool(&pool).filter_eq("id", 1);
+
+        let values = serde_json::json!({
+            "name; DROP TABLE users; --": "admin"
+        });
+
+        let sql = qb.to_update_sql(&values).unwrap();
+        println!("SQL update: {}", sql);
+        assert!(sql.contains("`name; DROP TABLE users; --` = ?"));
+    }
+
+    #[tokio::test]
+    async fn test_stream_api() {
+        use sqlx::Connection;
+        let mut conn = sqlx::SqliteConnection::connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO users (id, name) VALUES (1, 'alice'), (2, 'bob')")
+            .execute(&mut conn)
+            .await
+            .unwrap();
+
+        // Use find_in_tx which is standard in Premix
+        let qb = DummyModel::find_in_tx(&mut conn);
+
+        let mut stream = qb.stream().unwrap();
+        let mut count = 0;
+        while let Some(row) = stream.next().await {
+            let _: DummyModel = row.unwrap();
+            count += 1;
+        }
+        assert_eq!(count, 2);
     }
 }

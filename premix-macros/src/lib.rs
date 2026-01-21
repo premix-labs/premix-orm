@@ -79,298 +79,6 @@ fn derive_model_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStrea
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use syn::parse_quote;
-
-    use super::*;
-
-    #[test]
-    fn generate_generic_impl_includes_table_and_columns() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                name: String,
-                version: i32,
-                deleted_at: Option<String>,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("CREATE TABLE IF NOT EXISTS"));
-        assert!(tokens.contains("users"));
-        assert!(tokens.contains("deleted_at"));
-        assert!(tokens.contains("version"));
-    }
-
-    #[test]
-    fn generate_generic_impl_rejects_tuple_struct() {
-        let input: DeriveInput = parse_quote! {
-            struct User(i32, String);
-        };
-        let err = generate_generic_impl(&input).unwrap_err();
-        assert!(err.to_string().contains("named fields"));
-    }
-
-    #[test]
-    fn generate_generic_impl_rejects_non_struct() {
-        let input: DeriveInput = parse_quote! {
-            enum User {
-                A,
-                B,
-            }
-        };
-        let err = generate_generic_impl(&input).unwrap_err();
-        assert!(err.to_string().contains("only supports structs"));
-    }
-
-    #[test]
-    fn generate_generic_impl_version_update_branch() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                version: i32,
-                name: String,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("version = version + 1"));
-    }
-
-    #[test]
-    fn generate_generic_impl_no_version_branch() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                name: String,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(!tokens.contains("version = version + 1"));
-    }
-
-    #[test]
-    fn generate_generic_impl_includes_default_hooks_and_validation() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                name: String,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("ModelHooks"));
-        assert!(tokens.contains("ModelValidation"));
-    }
-
-    #[test]
-    fn generate_generic_impl_includes_schema_impl() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                name: String,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("ModelSchema"));
-        assert!(tokens.contains("SchemaColumn"));
-    }
-
-    #[test]
-    fn generate_generic_impl_includes_index_and_foreign_key_metadata() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                #[premix(index)]
-                name: String,
-                #[premix(unique(name = "users_email_uidx"))]
-                email: String,
-                #[premix(foreign_key(table = "accounts", column = "id"))]
-                account_id: i32,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("SchemaIndex"));
-        assert!(tokens.contains("idx_users_name"));
-        assert!(tokens.contains("users_email_uidx"));
-        assert!(tokens.contains("SchemaForeignKey"));
-        assert!(tokens.contains("accounts"));
-        assert!(tokens.contains("account_id"));
-    }
-
-    #[test]
-    fn generate_generic_impl_includes_sensitive_fields() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                #[premix(sensitive)]
-                email: String,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("sensitive_fields"));
-        assert!(tokens.contains("\"email\""));
-    }
-
-    #[test]
-    fn generate_generic_impl_skips_custom_hooks_and_validation() {
-        let input: DeriveInput = parse_quote! {
-            #[premix(custom_hooks, custom_validation)]
-            struct User {
-                id: i32,
-                name: String,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(!tokens.contains("impl premix_orm :: ModelHooks"));
-        assert!(!tokens.contains("impl premix_orm :: ModelValidation"));
-    }
-
-    #[test]
-    fn is_ignored_detects_attribute() {
-        let field: Field = parse_quote! {
-            #[premix(ignore)]
-            ignored: Option<String>
-        };
-        assert!(is_ignored(&field));
-    }
-
-    #[test]
-    fn is_ignored_false_for_other_attrs() {
-        let field: Field = parse_quote! {
-            #[serde(skip)]
-            name: String
-        };
-        assert!(!is_ignored(&field));
-    }
-
-    #[test]
-    fn is_ignored_false_for_premix_other_arg() {
-        let field: Field = parse_quote! {
-            #[premix(skip)]
-            name: String
-        };
-        assert!(!is_ignored(&field));
-    }
-
-    #[test]
-    fn is_sensitive_detects_attribute() {
-        let field: Field = parse_quote! {
-            #[premix(sensitive)]
-            secret: String
-        };
-        assert!(is_sensitive(&field));
-    }
-
-    #[test]
-    fn is_sensitive_false_for_other_attrs() {
-        let field: Field = parse_quote! {
-            #[serde(skip)]
-            secret: String
-        };
-        assert!(!is_sensitive(&field));
-    }
-
-    #[test]
-    fn is_ignored_false_when_premix_has_no_args() {
-        let field: Field = parse_quote! {
-            #[premix]
-            name: String
-        };
-        assert!(!is_ignored(&field));
-    }
-
-    #[test]
-    fn derive_model_impl_emits_tokens() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                name: String,
-            }
-        };
-        let tokens = derive_model_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("impl"));
-    }
-
-    #[test]
-    fn derive_model_impl_propagates_error() {
-        let input: DeriveInput = parse_quote! {
-            enum User {
-                A,
-            }
-        };
-        let err = derive_model_impl(&input).unwrap_err();
-        assert!(err.to_string().contains("only supports structs"));
-    }
-
-    #[test]
-    fn generate_generic_impl_includes_soft_delete_delete_impl() {
-        let input: DeriveInput = parse_quote! {
-            struct AuditLog {
-                id: i32,
-                deleted_at: Option<String>,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("deleted_at ="));
-        assert!(tokens.contains("has_soft_delete"));
-    }
-
-    #[test]
-    fn generate_generic_impl_ignores_marked_fields() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                name: String,
-                #[premix(ignore)]
-                temp: Option<String>,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("temp : None"));
-        assert!(!tokens.contains("\"temp\""));
-    }
-
-    #[test]
-    fn generate_generic_impl_adds_relation_bounds() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                #[has_many(Post)]
-                posts: Vec<Post>,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("Post : premix_orm :: Model < DB >"));
-    }
-
-    #[test]
-    fn generate_generic_impl_records_field_names() {
-        let input: DeriveInput = parse_quote! {
-            struct Account {
-                id: i32,
-                user_id: i32,
-                is_active: bool,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("\"user_id\""));
-        assert!(tokens.contains("\"is_active\""));
-    }
-
-    #[test]
-    fn generate_generic_impl_creates_column_constants() {
-        let input: DeriveInput = parse_quote! {
-            struct User {
-                id: i32,
-                name: String,
-            }
-        };
-        let tokens = generate_generic_impl(&input).unwrap().to_string();
-        assert!(tokens.contains("pub mod columns_user"));
-        assert!(tokens.contains("pub const ID : & str = \"id\""));
-        assert!(tokens.contains("pub const NAME : & str = \"name\""));
-    }
-}
-
 fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_name = &input.ident;
     let table_name = struct_name.to_string().to_lowercase() + "s";
@@ -1157,5 +865,297 @@ fn sql_type_expr_for_field(name: &str, ty: &syn::Type) -> proc_macro2::TokenStre
                 quote! { <DB as premix_orm::SqlDialect>::text_type() }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use syn::parse_quote;
+
+    use super::*;
+
+    #[test]
+    fn generate_generic_impl_includes_table_and_columns() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+                version: i32,
+                deleted_at: Option<String>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("CREATE TABLE IF NOT EXISTS"));
+        assert!(tokens.contains("users"));
+        assert!(tokens.contains("deleted_at"));
+        assert!(tokens.contains("version"));
+    }
+
+    #[test]
+    fn generate_generic_impl_rejects_tuple_struct() {
+        let input: DeriveInput = parse_quote! {
+            struct User(i32, String);
+        };
+        let err = generate_generic_impl(&input).unwrap_err();
+        assert!(err.to_string().contains("named fields"));
+    }
+
+    #[test]
+    fn generate_generic_impl_rejects_non_struct() {
+        let input: DeriveInput = parse_quote! {
+            enum User {
+                A,
+                B,
+            }
+        };
+        let err = generate_generic_impl(&input).unwrap_err();
+        assert!(err.to_string().contains("only supports structs"));
+    }
+
+    #[test]
+    fn generate_generic_impl_version_update_branch() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                version: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("version = version + 1"));
+    }
+
+    #[test]
+    fn generate_generic_impl_no_version_branch() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(!tokens.contains("version = version + 1"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_default_hooks_and_validation() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("ModelHooks"));
+        assert!(tokens.contains("ModelValidation"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_schema_impl() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("ModelSchema"));
+        assert!(tokens.contains("SchemaColumn"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_index_and_foreign_key_metadata() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[premix(index)]
+                name: String,
+                #[premix(unique(name = "users_email_uidx"))]
+                email: String,
+                #[premix(foreign_key(table = "accounts", column = "id"))]
+                account_id: i32,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("SchemaIndex"));
+        assert!(tokens.contains("idx_users_name"));
+        assert!(tokens.contains("users_email_uidx"));
+        assert!(tokens.contains("SchemaForeignKey"));
+        assert!(tokens.contains("accounts"));
+        assert!(tokens.contains("account_id"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_sensitive_fields() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[premix(sensitive)]
+                email: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("sensitive_fields"));
+        assert!(tokens.contains("\"email\""));
+    }
+
+    #[test]
+    fn generate_generic_impl_skips_custom_hooks_and_validation() {
+        let input: DeriveInput = parse_quote! {
+            #[premix(custom_hooks, custom_validation)]
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(!tokens.contains("impl premix_orm :: ModelHooks"));
+        assert!(!tokens.contains("impl premix_orm :: ModelValidation"));
+    }
+
+    #[test]
+    fn is_ignored_detects_attribute() {
+        let field: Field = parse_quote! {
+            #[premix(ignore)]
+            ignored: Option<String>
+        };
+        assert!(is_ignored(&field));
+    }
+
+    #[test]
+    fn is_ignored_false_for_other_attrs() {
+        let field: Field = parse_quote! {
+            #[serde(skip)]
+            name: String
+        };
+        assert!(!is_ignored(&field));
+    }
+
+    #[test]
+    fn is_ignored_false_for_premix_other_arg() {
+        let field: Field = parse_quote! {
+            #[premix(skip)]
+            name: String
+        };
+        assert!(!is_ignored(&field));
+    }
+
+    #[test]
+    fn is_sensitive_detects_attribute() {
+        let field: Field = parse_quote! {
+            #[premix(sensitive)]
+            secret: String
+        };
+        assert!(is_sensitive(&field));
+    }
+
+    #[test]
+    fn is_sensitive_false_for_other_attrs() {
+        let field: Field = parse_quote! {
+            #[serde(skip)]
+            secret: String
+        };
+        assert!(!is_sensitive(&field));
+    }
+
+    #[test]
+    fn is_ignored_false_when_premix_has_no_args() {
+        let field: Field = parse_quote! {
+            #[premix]
+            name: String
+        };
+        assert!(!is_ignored(&field));
+    }
+
+    #[test]
+    fn derive_model_impl_emits_tokens() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = derive_model_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("impl"));
+    }
+
+    #[test]
+    fn derive_model_impl_propagates_error() {
+        let input: DeriveInput = parse_quote! {
+            enum User {
+                A,
+            }
+        };
+        let err = derive_model_impl(&input).unwrap_err();
+        assert!(err.to_string().contains("only supports structs"));
+    }
+
+    #[test]
+    fn generate_generic_impl_includes_soft_delete_delete_impl() {
+        let input: DeriveInput = parse_quote! {
+            struct AuditLog {
+                id: i32,
+                deleted_at: Option<String>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("deleted_at ="));
+        assert!(tokens.contains("has_soft_delete"));
+    }
+
+    #[test]
+    fn generate_generic_impl_ignores_marked_fields() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+                #[premix(ignore)]
+                temp: Option<String>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("temp : None"));
+        assert!(!tokens.contains("\"temp\""));
+    }
+
+    #[test]
+    fn generate_generic_impl_adds_relation_bounds() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[has_many(Post)]
+                posts: Vec<Post>,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("Post : premix_orm :: Model < DB >"));
+    }
+
+    #[test]
+    fn generate_generic_impl_records_field_names() {
+        let input: DeriveInput = parse_quote! {
+            struct Account {
+                id: i32,
+                user_id: i32,
+                is_active: bool,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("\"user_id\""));
+        assert!(tokens.contains("\"is_active\""));
+    }
+
+    #[test]
+    fn generate_generic_impl_creates_column_constants() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("pub mod columns_user"));
+        assert!(tokens.contains("pub const ID : & str = \"id\""));
+        assert!(tokens.contains("pub const NAME : & str = \"name\""));
     }
 }

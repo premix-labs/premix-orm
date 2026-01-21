@@ -4,11 +4,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use sqlx::PgPool;
 use sqlx::SqlitePool;
 
+/// Metadata about a database column.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaColumn {
+    /// The name of the column.
     pub name: String,
+    /// The SQL type of the column (e.g., "INTEGER", "TEXT").
     pub sql_type: String,
+    /// Whether the column can contain NULL values.
     pub nullable: bool,
+    /// Whether the column is part of the Primary Key.
     pub primary_key: bool,
 }
 
@@ -18,34 +23,50 @@ impl SchemaColumn {
     }
 }
 
+/// Metadata about a database index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaIndex {
+    /// The name of the index.
     pub name: String,
+    /// The columns included in the index.
     pub columns: Vec<String>,
+    /// Whether the index is UNIQUE.
     pub unique: bool,
 }
 
+/// Metadata about a foreign key relationship.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaForeignKey {
+    /// The column in the current table.
     pub column: String,
+    /// The table being referenced.
     pub ref_table: String,
+    /// The column being referenced in the target table.
     pub ref_column: String,
 }
 
+/// Metadata about a database table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaTable {
+    /// The name of the table.
     pub name: String,
+    /// The columns in the table.
     pub columns: Vec<SchemaColumn>,
+    /// The indexes on the table.
     pub indexes: Vec<SchemaIndex>,
+    /// The foreign keys in the table.
     pub foreign_keys: Vec<SchemaForeignKey>,
+    /// The original CREATE TABLE SQL (if available).
     pub create_sql: Option<String>,
 }
 
 impl SchemaTable {
+    /// Returns a column by name if it exists in the table.
     pub fn column(&self, name: &str) -> Option<&SchemaColumn> {
         self.columns.iter().find(|c| c.name == name)
     }
 
+    /// Generates a `CREATE TABLE` SQL statement for this table.
     pub fn to_create_sql(&self) -> String {
         if let Some(sql) = &self.create_sql {
             return sql.clone();
@@ -72,10 +93,13 @@ impl SchemaTable {
     }
 }
 
+/// A trait for models that can provide their own schema metadata.
 pub trait ModelSchema {
+    /// Returns the schema metadata for this model.
     fn schema() -> SchemaTable;
 }
 
+/// Helper macro to collect schema metadata from multiple models.
 #[macro_export]
 macro_rules! schema_models {
     ($($model:ty),+ $(,)?) => {
@@ -83,53 +107,85 @@ macro_rules! schema_models {
     };
 }
 
+/// Represents a change in a column (addition or removal).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnDiff {
+    /// The table containing the column.
     pub table: String,
+    /// The name of the column.
     pub column: String,
+    /// The SQL type of the column.
     pub sql_type: Option<String>,
 }
 
+/// Represents a mismatch in column types between models and database.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnTypeDiff {
+    /// The table containing the column.
     pub table: String,
+    /// The name of the column.
     pub column: String,
+    /// The SQL type expected by the model.
     pub expected: String,
+    /// The actual SQL type found in the database.
     pub actual: String,
 }
 
+/// Represents a mismatch in column nullability.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnNullabilityDiff {
+    /// The table containing the column.
     pub table: String,
+    /// The name of the column.
     pub column: String,
+    /// Whether the model expects the column to be nullable.
     pub expected_nullable: bool,
+    /// Whether the column is actually nullable in the database.
     pub actual_nullable: bool,
 }
 
+/// Represents a mismatch in Primary Key status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnPrimaryKeyDiff {
+    /// The table containing the column.
     pub table: String,
+    /// The name of the column.
     pub column: String,
+    /// Whether the model expects the column to be a Primary Key.
     pub expected_primary_key: bool,
+    /// Whether the column is actually a Primary Key in the database.
     pub actual_primary_key: bool,
 }
 
+/// Represents the differences between two database schemas.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SchemaDiff {
+    /// Tables expected but missing in the actual database.
     pub missing_tables: Vec<String>,
+    /// Tables present in the database but not in the models.
     pub extra_tables: Vec<String>,
+    /// Columns missing in existing tables.
     pub missing_columns: Vec<ColumnDiff>,
+    /// Columns present in the database but not in the models.
     pub extra_columns: Vec<ColumnDiff>,
+    /// Columns with different types than expected.
     pub type_mismatches: Vec<ColumnTypeDiff>,
+    /// Columns with different nullability than expected.
     pub nullability_mismatches: Vec<ColumnNullabilityDiff>,
+    /// Columns with different Primary Key status than expected.
     pub primary_key_mismatches: Vec<ColumnPrimaryKeyDiff>,
+    /// Indexes missing in the actual database.
     pub missing_indexes: Vec<(String, SchemaIndex)>,
+    /// Indexes present in the database but not in the models.
     pub extra_indexes: Vec<(String, SchemaIndex)>,
+    /// Foreign keys missing in the actual database.
     pub missing_foreign_keys: Vec<(String, SchemaForeignKey)>,
+    /// Foreign keys present in the database but not in the models.
     pub extra_foreign_keys: Vec<(String, SchemaForeignKey)>,
 }
 
 impl SchemaDiff {
+    /// Returns true if there are no differences.
     pub fn is_empty(&self) -> bool {
         self.missing_tables.is_empty()
             && self.extra_tables.is_empty()
@@ -145,6 +201,7 @@ impl SchemaDiff {
     }
 }
 
+/// Formats a [`SchemaDiff`] into a human-readable summary.
 pub fn format_schema_diff_summary(diff: &SchemaDiff) -> String {
     if diff.is_empty() {
         return "Schema diff: no changes".to_string();
@@ -192,6 +249,7 @@ pub fn format_schema_diff_summary(diff: &SchemaDiff) -> String {
     lines.join("\n")
 }
 
+/// Introspects the schema of a SQLite database.
 pub async fn introspect_sqlite_schema(pool: &SqlitePool) -> Result<Vec<SchemaTable>, sqlx::Error> {
     let table_names: Vec<String> = sqlx::query_scalar(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '_premix_migrations' ORDER BY name",
@@ -238,6 +296,7 @@ pub async fn introspect_sqlite_schema(pool: &SqlitePool) -> Result<Vec<SchemaTab
 }
 
 #[cfg(feature = "postgres")]
+/// Introspects the schema of a PostgreSQL database.
 pub async fn introspect_postgres_schema(pool: &PgPool) -> Result<Vec<SchemaTable>, sqlx::Error> {
     let table_names: Vec<String> = sqlx::query_scalar(
         "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name != '_premix_migrations' ORDER BY table_name",
@@ -302,6 +361,7 @@ pub async fn introspect_postgres_schema(pool: &PgPool) -> Result<Vec<SchemaTable
     Ok(tables)
 }
 
+/// Compares the actual SQLite schema with an expected list of tables.
 pub async fn diff_sqlite_schema(
     pool: &SqlitePool,
     expected: &[SchemaTable],
@@ -310,6 +370,7 @@ pub async fn diff_sqlite_schema(
     Ok(diff_schema(expected, &actual))
 }
 
+/// Compares the actual PostgreSQL schema with an expected list of tables.
 #[cfg(feature = "postgres")]
 pub async fn diff_postgres_schema(
     pool: &PgPool,
@@ -319,6 +380,7 @@ pub async fn diff_postgres_schema(
     Ok(diff_schema(expected, &actual))
 }
 
+/// Calculates the difference between two sets of table metadata.
 pub fn diff_schema(expected: &[SchemaTable], actual: &[SchemaTable]) -> SchemaDiff {
     let mut diff = SchemaDiff::default();
 
@@ -450,6 +512,7 @@ pub fn diff_schema(expected: &[SchemaTable], actual: &[SchemaTable]) -> SchemaDi
     diff
 }
 
+/// Generates SQLite migration SQL based on the provided schema differences.
 pub fn sqlite_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Vec<String> {
     let expected_map: BTreeMap<String, &SchemaTable> =
         expected.iter().map(|t| (t.name.clone(), t)).collect();
@@ -609,6 +672,7 @@ fn normalize_sql_type(sql_type: &str) -> String {
 }
 
 #[cfg(feature = "postgres")]
+/// Generates PostgreSQL migration SQL for a given schema difference.
 pub fn postgres_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Vec<String> {
     let expected_map: BTreeMap<String, &SchemaTable> =
         expected.iter().map(|t| (t.name.clone(), t)).collect();

@@ -1,3 +1,7 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+
 //! # Premix ORM
 //!
 //! > **"Write Rust, Run Optimized SQL."**
@@ -113,6 +117,7 @@ pub use premix_macros::Model;
 /// ```
 pub use premix_macros::premix_query;
 
+/// Integration with common web frameworks (Axum, Actix, etc.).
 pub mod integrations;
 
 #[cfg(feature = "axum")]
@@ -121,6 +126,7 @@ pub use integrations::axum::*;
 #[cfg(feature = "actix")]
 pub use integrations::actix::*;
 
+/// The Premix prelude, re-exporting commonly used traits and types.
 pub mod prelude {
     pub use premix_core::prelude::*;
 

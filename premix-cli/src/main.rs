@@ -94,12 +94,12 @@ enum MigrateAction {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let cli = Cli::parse();
     run_cli(cli).await
 }
 
-async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     match cli.command {
         Commands::Init => {
             println!(">> Initializing Premix project...");
@@ -293,7 +293,7 @@ fn rust_type_for_postgres(data_type: &str, udt_name: &str, nullable: bool) -> St
 async fn run_scaffold(
     db_url: &str,
     table: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     if db_url.starts_with("postgres://") || db_url.starts_with("postgresql://") {
         #[cfg(feature = "postgres")]
         {
@@ -326,7 +326,7 @@ async fn run_scaffold(
 async fn scaffold_sqlite(
     pool: &SqlitePool,
     table: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let tables = schema::introspect_sqlite_schema(pool).await?;
     let tables = tables
         .into_iter()
@@ -351,7 +351,7 @@ async fn scaffold_sqlite(
 async fn scaffold_postgres(
     pool: &sqlx::PgPool,
     table: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let tables: Vec<String> = if let Some(name) = table {
         vec![name.to_string()]
     } else {
@@ -397,7 +397,7 @@ fn resolve_db_url(database: Option<String>) -> String {
 fn create_migration_file(
     name: &str,
     dir_path: &Path,
-) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     if !dir_path.exists() {
         fs::create_dir(dir_path)?;
         println!(">> Created 'migrations' directory.");
@@ -423,7 +423,7 @@ fn create_migration_file(
 async fn run_migrations_up(
     db_url: &str,
     migrations_dir: &Path,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let migrations_dir = migrations_dir.to_string_lossy();
     let migrations = load_migrations(&migrations_dir)?;
     if migrations.is_empty() {
@@ -466,7 +466,7 @@ async fn run_migrations_up(
 async fn run_migrations_down(
     db_url: &str,
     migrations_dir: &Path,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let migrations_dir = migrations_dir.to_string_lossy();
     let migrations = load_migrations(&migrations_dir)?;
     if migrations.is_empty() {
@@ -504,7 +504,7 @@ async fn run_migrations_down(
     }
 }
 
-fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Error>> {
+fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Error + Send + Sync>> {
     let mut migrations = Vec::new();
     let dir = Path::new(path);
 
@@ -563,7 +563,7 @@ fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Err
     Ok(migrations)
 }
 
-fn run_sync(db_url: &str) -> Result<bool, Box<dyn std::error::Error>> {
+fn run_sync(db_url: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let sync_entry = Path::new("src/bin/premix-sync.rs");
     if !sync_entry.exists() {
         return Ok(false);
@@ -581,7 +581,7 @@ fn run_sync(db_url: &str) -> Result<bool, Box<dyn std::error::Error>> {
     Ok(true)
 }
 
-fn run_schema_diff(db_url: &str) -> Result<bool, Box<dyn std::error::Error>> {
+fn run_schema_diff(db_url: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let schema_entry = Path::new("src/bin/premix-schema.rs");
     if !schema_entry.exists() {
         return Ok(false);
@@ -605,7 +605,7 @@ fn run_schema_diff(db_url: &str) -> Result<bool, Box<dyn std::error::Error>> {
 fn run_schema_migrate(
     db_url: &str,
     out: Option<PathBuf>,
-) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error + Send + Sync>> {
     let schema_entry = Path::new("src/bin/premix-schema.rs");
     if !schema_entry.exists() {
         return Ok(None);
@@ -646,7 +646,7 @@ fn run_schema_migrate(
 fn create_schema_migration_file(
     sql: &str,
     dir_path: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     if !dir_path.exists() {
         fs::create_dir(dir_path)?;
         println!(">> Created 'migrations' directory.");
@@ -662,7 +662,7 @@ fn create_schema_migration_file(
 fn write_schema_migration_file(
     sql: &str,
     file_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = fs::File::create(file_path)?;
     let content = format!(
         "-- Migration: schema_diff\n-- Created at: {}\n\n-- up\n{}\n\n-- down\n-- TODO: add down migration\n",
@@ -1119,9 +1119,12 @@ mod tests {
         let root = make_temp_dir();
         fs::create_dir_all(root.join("migrations")).unwrap();
 
-        let _lock = CWD_LOCK.lock().unwrap();
-        let old_cwd = env::current_dir().unwrap();
-        env::set_current_dir(&root).unwrap();
+        {
+            let _lock = CWD_LOCK.lock().unwrap();
+            let _old_cwd = env::current_dir().unwrap();
+            env::set_current_dir(&root).unwrap();
+            drop(_lock);
+        }
 
         let result = run_cli(Cli {
             command: Commands::Migrate {
@@ -1132,7 +1135,8 @@ mod tests {
         })
         .await;
 
-        env::set_current_dir(old_cwd).unwrap();
+        let _old_cwd = env::current_dir().unwrap();
+        env::set_current_dir(_old_cwd).unwrap();
         result.unwrap();
 
         let files = fs::read_dir(root.join("migrations"))
@@ -1148,9 +1152,12 @@ mod tests {
         let root = make_temp_dir();
         fs::create_dir_all(root.join("migrations")).unwrap();
 
-        let _lock = CWD_LOCK.lock().unwrap();
-        let old_cwd = env::current_dir().unwrap();
-        env::set_current_dir(&root).unwrap();
+        {
+            let _lock = CWD_LOCK.lock().unwrap();
+            let _old_cwd = env::current_dir().unwrap();
+            env::set_current_dir(&root).unwrap();
+            drop(_lock);
+        }
 
         let db_url = sqlite_test_url(&root);
         let result = run_cli(Cli {
@@ -1162,7 +1169,8 @@ mod tests {
         })
         .await;
 
-        env::set_current_dir(old_cwd).unwrap();
+        let _old_cwd = env::current_dir().unwrap();
+        env::set_current_dir(_old_cwd).unwrap();
         result.unwrap();
 
         let _ = fs::remove_dir_all(&root);
