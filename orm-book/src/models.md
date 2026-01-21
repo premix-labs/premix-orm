@@ -93,6 +93,24 @@ struct User {
 
 Ignored fields are not included in schema generation or SQL statements.
 
+## Renaming Columns
+
+You can map a Rust field to a different SQL column name with `#[premix(rename = "...")]`:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+#[derive(Model)]
+struct User {
+    id: i32,
+
+    #[premix(rename = "full_name")]
+    name: String,
+}
+```
+
+This is particularly useful when working with legacy databases or specific naming conventions.
+
 ## Sensitive Fields
 
 Mark sensitive columns to redact values in query logs:

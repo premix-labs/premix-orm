@@ -16,7 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Benchmarks:** Updated benchmarks showing `premix_query!` matching raw `sqlx` latency exactly.
 - **Benchmarks:** Added `premix_vs_sqlx` benchmark for direct comparison against raw `sqlx` latency.
 - **Scripts:** Added `scripts/bench/bench_compare.ps1` and `bench_direct.ps1` for convenient benchmark runs.
+- **Scripts:** Standardized all benchmark scripts (`bench_orm.ps1`, `bench_io.ps1`) to use CPU pinning and high priority for reproducible results.
 - **Build:** Upgraded project to **Rust Edition 2024** with resolver v3.
+
+### Fixed
+
+- **Macros:** Resolved "expected ," parsing error in `collect_schema_specs` when handling field attributes with values (like `rename`).
+- **Macros:** Improved attribute skipping logic to correctly handle `syn` 2.0 nested meta parsing.
 
 ### Changed
 

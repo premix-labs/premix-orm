@@ -209,11 +209,15 @@ use premix_orm::prelude::*;
 #[derive(Model)]
 struct User {
     id: i32,
+    #[premix(rename = "full_name")]
     name: String,
 
     #[has_many(Post)]
     #[premix(ignore)]
     posts: Option<Vec<Post>>,
+
+    #[premix(sensitive)]
+    password_hash: String,
 }
 
 #[derive(Model)]

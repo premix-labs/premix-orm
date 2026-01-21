@@ -93,16 +93,19 @@ Run2: raw 6.60 µs, premix 7.35 µs (+11%)
 Run3: raw 6.43 µs, premix 6.93 µs (+7.8%) ✅
 ```
 
-### Final Validation: Compile-Time Macro vs Raw SQLx
+### Final Validation: Script (Core 2 Pinned, High Priority)
 
-We implemented `premix_query!` macro to generate static SQL at compile time.
+Standardized run via `scripts/bench/bench_compare.ps1` to ensure reproducibility.
 
 ```
-raw_sqlx_fetch_one:      [6.8570 µs 6.8898 µs 6.9288 µs]
-premix_static_query:     [6.7704 µs 6.8078 µs 6.8439 µs] (FASTER!)
+raw_sqlx_fetch_one:      [101.32 µs ... 104.92 µs]
+premix_static_query:     [104.52 µs ... 108.86 µs] (Overhead +3.5%)
+premix_find_fetch_one:   [116.81 µs ... 121.71 µs] (Overhead +15.8%)
 
-Overhead: -1.2% (Premix is faster within margin of error) ✅
-Verdict: TRUE ZERO-OVERHEAD ACHIEVED
+Verdict:
+1. System/Core specific absolute latency varies (higher in this pinned run).
+2. Relative Performance holds: Static Query is ~11% faster than Dynamic
+   and tracks Raw SQLx closely (+3.5% overhead in this noise-controlled environment).
 ```
 
 ---

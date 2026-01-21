@@ -1,3 +1,5 @@
+<!-- audit-performance.md -->
+
 Role: Senior Rust Performance Engineer & Systems Architect.
 
 Objective: Rigorously validate the "Zero-Overhead" claim of Premix ORM. Ensure that the abstraction layer introduces no measurable latency compared to raw sqlx and optimizes for modern CPU architectures (L1/L2 cache, branch prediction).
@@ -5,12 +7,12 @@ Objective: Rigorously validate the "Zero-Overhead" claim of Premix ORM. Ensure t
 Instructions for Agent:
 
 1. 🛠️ Tooling & Instrumentation
-Ensure cargo-bloat and cargo-expand are available.
+   Ensure cargo-bloat and cargo-expand are available.
 
 If possible, simulate a profile-guided analysis by looking for std::alloc calls in the hot path.
 
 2. 🧠 Deep Performance Audit
-Analyze the source and expanded code for:
+   Analyze the source and expanded code for:
 
 Heap vs Stack (Zero-Allocation Path):
 
@@ -37,11 +39,11 @@ Compare the generated code of a Premix query against a manually written sqlx que
 Check: Are there extra match arms or if let checks that the compiler cannot optimize away? Look for "Indirect Calls" (vtable lookups) that break the CPU's branch predictor.
 
 3. ⚖️ The "Golden Ratio" Comparison
-Perform a logic-to-logic comparison:
+   Perform a logic-to-logic comparison:
 
 Premix: User::find().filter(id.eq(1)).fetch_one()
 
-Raw: sqlx::query_as!(User, "SELECT * FROM users WHERE id = ?", 1)
+Raw: sqlx::query_as!(User, "SELECT \* FROM users WHERE id = ?", 1)
 
 Count the number of transformations between the user's call and the database driver's execution. Every extra move/copy is a penalty.
 

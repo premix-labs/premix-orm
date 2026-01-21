@@ -1,3 +1,5 @@
+<!-- audit-core-macros.md -->
+
 Role: Senior Rust Compiler Engineer & Systems Architect.
 
 Objective: Conduct a deep-dive forensic audit of the Premix ORM source code and its expanded macro artifacts. Ensure "Zero-Overhead" promises are mathematically true and Macro Hygiene is bulletproof.
@@ -5,7 +7,7 @@ Objective: Conduct a deep-dive forensic audit of the Premix ORM source code and 
 Instructions for Agent:
 
 1. 🧬 Macro Hygiene & Namespace Safety (Critical)
-Fully Qualified Paths Check:
+   Fully Qualified Paths Check:
 
 Scan the generated code (via cargo expand). Does it use Option or ::std::option::Option?
 
@@ -13,12 +15,12 @@ Rule: All types used in generated code MUST use absolute paths (e.g., ::sqlx::..
 
 Variable Shadowing:
 
-Check generated variable names inside functions. Are they prefixed (e.g., __premix_internal_var) to avoid colliding with user fields?
+Check generated variable names inside functions. Are they prefixed (e.g., \_\_premix_internal_var) to avoid colliding with user fields?
 
 Verify use of Span::mixed_site() vs Span::call_site() for proper identifier hygiene.
 
 2. ⚡ Zero-Overhead "White-Box" Analysis
-Compile-Time vs. Runtime SQL:
+   Compile-Time vs. Runtime SQL:
 
 Analyze the to_sql() implementation. Is the SQL string constructed using format! at runtime (Heap allocation)?
 
@@ -35,14 +37,14 @@ Trait Dispatch:
 Verify that generated code relies on Static Dispatch (Generics/Monomorphization) and explicitly avoids Box<dyn Trait> in hot paths.
 
 3. 🧵 Async/Concurrency Safety
-Send + Sync Verification:
+   Send + Sync Verification:
 
 The generated Futures (from async methods) MUST be Send to work with Tokio/Axum.
 
 Check if any Rc<RefCell<...>> (which is not Thread Safe) slipped into the generated code. It should be Arc<Mutex<...>> or Arc<RwLock<...>> if shared state is needed.
 
 4. 📍 Diagnostic Quality (Span Analysis)
-Error Attribution:
+   Error Attribution:
 
 Review the proc_macro source (in premix-macros).
 

@@ -4,16 +4,16 @@ Use this checklist before publishing a new version.
 
 ### Versioning and docs
 
-- [x] Bump versions in `premix-core`, `premix-macros`, `premix-orm`, `premix-cli`.
-- [x] Align internal dependency versions (`premix-orm`/`premix-cli` -> `premix-core`/`premix-macros`).
-- [x] Update `CHANGELOG.md` with release notes and date.
-- [x] Update README and book version strings (`README.md`, `premix-orm/README.md`, `orm-book/`).
+- [ ] Bump versions in `premix-core`, `premix-macros`, `premix-orm`, `premix-cli`.
+- [ ] Align internal dependency versions (`premix-orm`/`premix-cli` -> `premix-core`/`premix-macros`).
+- [ ] Update `CHANGELOG.md` with release notes and date.
+- [ ] Update README and book version strings (`README.md`, `premix-orm/README.md`, `orm-book/`).
 
 ### Quality checks
 
-- [x] Format and lint: `scripts/dev/run_fmt.ps1`
-- [x] Quick tests: `scripts/test/test_quick.ps1`
-- [x] Build workspace: `cargo build`
+- [ ] Format and lint: `scripts/dev/run_fmt.ps1`
+- [ ] Quick tests: `scripts/test/test_quick.ps1`
+- [ ] Build workspace: `cargo build`
 
 ### Publish flow
 
