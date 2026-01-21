@@ -2,23 +2,44 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Test & Lint
-    runs-on: ubuntu-latest
+    name: Test & Lint (${{ matrix.os }}, ${{ matrix.toolchain }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        toolchain:
-          - stable
-          # - beta
-          # - nightly
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        toolchain: [stable, beta]
+        include:
+          - os: ubuntu-latest
+            toolchain: nightly
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: premix_test
+        ports:
+          - 5432:5432
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: premix_test
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+        ports:
+          - 3306:3306
 
     steps:
       - uses: actions/checkout@v4
@@ -36,10 +57,19 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Run Tests
-        run: cargo test --verbose
+        run: cargo test --workspace --verbose --all-features
 
-      - name: Run Benchmarks (Check Compilation)
-        run: cargo check --benches
+  msrv:
+    name: MSRV Check (1.85.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.85.0
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+      - name: Cargo Check
+        run: cargo check --workspace --all-targets --all-features
