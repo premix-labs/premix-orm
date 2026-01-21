@@ -301,6 +301,20 @@ mod tests {
         assert!(tokens.contains("\"user_id\""));
         assert!(tokens.contains("\"is_active\""));
     }
+
+    #[test]
+    fn generate_generic_impl_creates_column_constants() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                name: String,
+            }
+        };
+        let tokens = generate_generic_impl(&input).unwrap().to_string();
+        assert!(tokens.contains("pub mod columns_user"));
+        assert!(tokens.contains("pub const ID : & str = \"id\""));
+        assert!(tokens.contains("pub const NAME : & str = \"name\""));
+    }
 }
 
 fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
@@ -349,8 +363,15 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         .cloned()
         .collect();
     let field_names_no_id_len = field_names_no_id.len();
-    let all_columns_joined = field_names.join(", ");
-    let no_id_columns_joined = field_names_no_id.join(", ");
+    // all_columns_joined and no_id_columns_joined removed as part of Zero-Overhead optimization (replaced by concat!)
+
+    // Prepare head/tail for concat! (to avoid trailing commas and handle separators)
+    let all_cols_head = field_names.first().cloned().unwrap_or_default();
+    let all_cols_tail: Vec<_> = field_names.iter().skip(1).cloned().collect();
+
+    let no_id_cols_head = field_names_no_id.first().cloned().unwrap_or_default();
+    let no_id_cols_tail: Vec<_> = field_names_no_id.iter().skip(1).cloned().collect();
+
     let field_idents_len = field_idents.len();
     let field_nullables: Vec<_> = db_fields.iter().map(|f| is_option_type(&f.ty)).collect();
     let field_primary_keys: Vec<_> = field_names.iter().map(|n| n == "id").collect();
@@ -625,8 +646,30 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         }
     };
 
+    let col_consts: Vec<_> = field_names
+        .iter()
+        .zip(field_idents.iter())
+        .map(|(name, ident)| {
+            let const_name = syn::Ident::new(&ident.to_string().to_uppercase(), ident.span());
+            quote! {
+                pub const #const_name: &str = #name;
+            }
+        })
+        .collect();
+
+    let columns_mod_ident = syn::Ident::new(
+        &format!("columns_{}", struct_name.to_string().to_lowercase()),
+        struct_name.span(),
+    );
+
     // Generic Implementation
     Ok(quote! {
+        // Generate column constants
+        #[allow(non_snake_case)]
+        pub mod #columns_mod_ident {
+             #( #col_consts )*
+        }
+
         impl<'r, R> premix_orm::sqlx::FromRow<'r, R> for #struct_name
         where
             R: premix_orm::sqlx::Row,
@@ -679,7 +722,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 format!("CREATE TABLE IF NOT EXISTS {} ({})", #table_name, cols.join(", "))
             }
 
-            fn list_columns() -> Vec<String> {
+            fn list_columns() -> ::std::vec::Vec<::std::string::String> {
                 vec![ #( #field_names.to_string() ),* ]
             }
 
@@ -690,7 +733,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             fn save<'a, E>(
                 &'a mut self,
                 executor: E,
-            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            ) -> impl ::std::future::Future<Output = ::std::result::Result<(), premix_orm::sqlx::Error>>
             + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
@@ -700,15 +743,20 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 use premix_orm::ModelHooks;
                 self.before_save().await?;
 
-                // Filter out 'id' and 'version' for INSERT
-                const ALL_COLUMNS: [&str; #field_idents_len] = [#( #field_names ),*];
-                const NO_ID_COLUMNS: [&str; #field_names_no_id_len] = [#( #field_names_no_id ),*];
-                let columns: &[&str] = if self.id == 0 { &NO_ID_COLUMNS } else { &ALL_COLUMNS };
-                let column_list: &str = if self.id == 0 { #no_id_columns_joined } else { #all_columns_joined };
-                let placeholders = premix_orm::build_placeholders::<DB>(1, columns.len());
+                // CONSTANT column lists to avoid runtime joining/allocation
+                // We use head/tail pattern to insert ", " separator without trailing comma
+                const ALL_COLUMNS_LIST: &str = concat!(#all_cols_head, #( ", ", #all_cols_tail ),*);
+                const NO_ID_COLUMNS_LIST: &str = concat!(#no_id_cols_head, #( ", ", #no_id_cols_tail ),*);
+
+                let column_list: &str = if self.id == 0 { NO_ID_COLUMNS_LIST } else { ALL_COLUMNS_LIST };
+
+                // We still need to calculate placeholders at runtime because they depend on the count and DB dialect
+                let count = if self.id == 0 { #field_names_no_id_len } else { #field_idents_len };
+                let placeholders = premix_orm::build_placeholders::<DB>(1, count);
 
                 let supports_returning = <DB as premix_orm::SqlDialect>::supports_returning();
                 if supports_returning {
+                    // Optimized format usage
                     let sql = format!(
                         "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
                         #table_name,
@@ -777,7 +825,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
             fn find_by_id<'a, E>(
                 executor: E,
                 id: i32,
-            ) -> impl ::std::future::Future<Output = Result<Option<Self>, premix_orm::sqlx::Error>>
+            ) -> impl ::std::future::Future<Output = ::std::result::Result<::std::option::Option<Self>, premix_orm::sqlx::Error>>
             + Send
             where
                 E: premix_orm::IntoExecutor<'a, DB = DB>
@@ -785,11 +833,14 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 async move {
                 let mut executor = executor.into_executor();
                 let p = <DB as premix_orm::SqlDialect>::placeholder(1);
-                let mut where_clause = format!("WHERE id = {}", p);
-                if Self::has_soft_delete() {
-                    where_clause.push_str(" AND deleted_at IS NULL");
-                }
-                let sql = format!("SELECT * FROM {} {} LIMIT 1", #table_name, where_clause);
+
+                // Optimization: Pre-calculate the base SQL string
+                let sql = if Self::has_soft_delete() {
+                    format!("SELECT * FROM {} WHERE id = {} AND deleted_at IS NULL LIMIT 1", #table_name, p)
+                } else {
+                    format!("SELECT * FROM {} WHERE id = {} LIMIT 1", #table_name, p)
+                };
+
                 premix_orm::tracing::debug!(
                     operation = "select",
                     table = #table_name,
@@ -797,7 +848,6 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
                 let query = premix_orm::sqlx::query_as::<DB, Self>(&sql).bind(id);
-
                 executor.fetch_optional(query).await
                 }
             }

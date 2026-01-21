@@ -87,6 +87,7 @@ macro_rules! schema_models {
 pub struct ColumnDiff {
     pub table: String,
     pub column: String,
+    pub sql_type: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -350,17 +351,21 @@ pub fn diff_schema(expected: &[SchemaTable], actual: &[SchemaTable]) -> SchemaDi
 
         for col in expected_cols.keys() {
             if !actual_cols.contains_key(col) {
+                let sql_type = expected_cols.get(col).map(|c| c.normalized_type());
                 diff.missing_columns.push(ColumnDiff {
                     table: (*name).to_string(),
                     column: (*col).to_string(),
+                    sql_type,
                 });
             }
         }
         for col in actual_cols.keys() {
             if !expected_cols.contains_key(col) {
+                let sql_type = actual_cols.get(col).map(|c| c.normalized_type());
                 diff.extra_columns.push(ColumnDiff {
                     table: (*name).to_string(),
                     column: (*col).to_string(),
+                    sql_type,
                 });
             }
         }
@@ -477,6 +482,21 @@ pub fn sqlite_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Vec<
             let Some(col) = schema.column(&col_name) else {
                 continue;
             };
+
+            // Heuristic: Check for potential rename from extra columns
+            // Simple check: Look for an extra column in the same table with the same type
+            // that isn't already "claimed" (though here we just suggest)
+            let potential_rename = diff.extra_columns.iter().find(|e| {
+                e.table == table && e.sql_type.as_deref() == Some(&col.normalized_type())
+            });
+
+            if let Some(old) = potential_rename {
+                statements.push(format!(
+                    "-- SUGESTION: Potential rename from column '{}' to '{}'?",
+                    old.column, col.name
+                ));
+            }
+
             if col.primary_key {
                 statements.push(format!(
                     "-- TODO: add primary key column {}.{} manually",
@@ -484,6 +504,14 @@ pub fn sqlite_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Vec<
                 ));
                 continue;
             }
+
+            if !col.nullable {
+                statements.push(format!(
+                    "-- WARNING: Adding NOT NULL column '{}.{}' without a default value will fail if table contains rows.",
+                    table, col.name
+                ));
+            }
+
             let mut stmt = format!(
                 "ALTER TABLE {} ADD COLUMN {} {}",
                 table, col.name, col.sql_type
@@ -613,6 +641,19 @@ pub fn postgres_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Ve
             let Some(col) = schema.column(&col_name) else {
                 continue;
             };
+
+            // Heuristic: Check for potential rename
+            let potential_rename = diff.extra_columns.iter().find(|e| {
+                e.table == table && e.sql_type.as_deref() == Some(&col.normalized_type())
+            });
+
+            if let Some(old) = potential_rename {
+                statements.push(format!(
+                    "-- SUGESTION: Potential rename from column '{}' to '{}'?",
+                    old.column, col.name
+                ));
+            }
+
             if col.primary_key {
                 statements.push(format!(
                     "-- TODO: add primary key column {}.{} manually",
@@ -620,6 +661,14 @@ pub fn postgres_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Ve
                 ));
                 continue;
             }
+
+            if !col.nullable {
+                statements.push(format!(
+                    "-- WARNING: Adding NOT NULL column '{}.{}' without a default value will fail if table contains rows.",
+                    table, col.name
+                ));
+            }
+
             let mut stmt = format!(
                 "ALTER TABLE {} ADD COLUMN {} {}",
                 table, col.name, col.sql_type

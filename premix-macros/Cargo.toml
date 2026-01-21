@@ -1,6 +1,6 @@
 [package]
 name = "premix-macros"
-version = "1.0.6-alpha"
+version = "1.0.7-alpha"
 edition = "2024"
 description = "Proc-macros for Premix ORM."
 license = "MIT"
@@ -8,12 +8,15 @@ readme = "README.md"
 repository = "https://github.com/premix-labs/premix-orm"
 
 [lib]
-proc-macro = true # <--- This line is very important!
+proc-macro = true # บอก Rust ว่า Crate นี้คือ "Compiler Plugin" (จะถูก Run ตอน Compile Time เท่านั้น)
 
 [dependencies]
-syn = "2.0.114"         # Parser: Reads Rust code (Struct)
-quote = "1.0.43"        # Generator: Generates Rust code back
-proc-macro2 = "1.0.105" # Bridge
+# -------------------------------------------------------------------------
+# The "Holy Trinity" of Proc Macros
+# -------------------------------------------------------------------------
+syn = "2.0.114"         # Parser: มีหน้าที่อ่าน Rust Code (Struct) แล้วแปลงเป็น Syntax Tree (AST) ให้เราแก้
+quote = "1.0.43"        # Generator: มีหน้าที่สร้าง Rust Code ใหม่กลับออกมา (เหมือนพิมพ์ Code โดยใช้ตัวแปรได้)
+proc-macro2 = "1.0.105" # Bridge: เป็นตัวเชื่อมให้เราเขียน Unit Test ได้ (เพราะ `proc_macro` ของจริงเทสยาก)
 
 [dev-dependencies]
 premix-core = { path = "../premix-core" }

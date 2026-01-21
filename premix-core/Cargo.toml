@@ -1,6 +1,6 @@
 [package]
 name = "premix-core"
-version = "1.0.6-alpha"
+version = "1.0.7-alpha"
 edition = "2024"
 description = "A Zero-Overhead, Type-Safe ORM for Rust that runs optimized SQL."
 license = "MIT"
@@ -10,21 +10,31 @@ keywords = ["orm", "database", "sql", "async", "performance"]
 categories = ["database", "asynchronous"]
 [features]
 default = ["sqlite"]
-sqlite = ["sqlx/sqlite"]
-postgres = ["sqlx/postgres"]
-mysql = ["sqlx/mysql"]
-metrics = ["dep:metrics"]
+
+# Database Support (ส่งค่าต่อไปยัง Library sqlx)
+sqlite = ["sqlx/sqlite"]     # รองรับ SQLite (ใช้ SQLx)
+postgres = ["sqlx/postgres"] # รองรับ PostgreSQL
+mysql = ["sqlx/mysql"]       # รองรับ MySQL
+
+# Metrics Feature
+metrics = [
+    "dep:metrics",
+    "dep:metrics-exporter-prometheus",
+] # เปิดใช้งานระบบเก็บสถิติและ Prometheus Exporter
 
 [dependencies]
+# SQLx: Library หลักที่ใช้คุยกับ Database
 sqlx = { version = "0.8.6", features = [
-    "runtime-tokio",
-    "macros",
+    "runtime-tokio", # ใช้ระบบ Async ของ Tokio
+    "macros",        # เปิดใช้งาน sqlx-macros สำหรับ query! (ถ้าต้องการใช้)
 ], default-features = false }
-tracing = "0.1.44"
-serde = "1.0.228"
-serde_json = "1.0.149"
-chrono = { version = "0.4", features = ["serde"] }
-metrics = { version = "0.22", optional = true }
+
+tracing = "0.1.44"                                                  # ระบบ Logging แบบโครงสร้าง (Structured Logging)
+serde = "1.0.228"                                                   # ระบบ Serialize/Deserialize ข้อมูล
+serde_json = "1.0.149"                                              # สำหรับจัดการข้อมูล JSON
+chrono = { version = "0.4", features = ["serde"] }                  # จัดการวันและเวลา
+metrics = { version = "0.22", optional = true }                     # เก็บสถิติความเร็วและการทำงาน (เปิดตาม feature)
+metrics-exporter-prometheus = { version = "0.13", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
