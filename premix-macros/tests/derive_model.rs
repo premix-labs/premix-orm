@@ -103,8 +103,8 @@ async fn derive_model_relations_work() {
         "posts",
         premix_core::Executor::Pool(&pool),
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
     assert_eq!(users[0].posts.as_ref().unwrap().len(), 1);
     assert_eq!(users[1].posts.as_ref().unwrap().len(), 1);
 }

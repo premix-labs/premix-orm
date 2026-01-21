@@ -1,6 +1,6 @@
 [package]
 name = "premix-cli"
-version = "1.0.6-alpha"
+version = "1.0.7-alpha"
 edition = "2024"
 description = "Command-line tool for Premix ORM (Migration management and more)."
 license = "MIT"
@@ -10,14 +10,22 @@ keywords = ["orm", "cli", "database", "migration"]
 categories = ["database", "development-tools::cargo-plugins"]
 
 [dependencies]
-clap = { version = "4.5.23", features = ["derive"] }
-tokio = { version = "1.49.0", features = ["full"] }
-premix-core = { version = "=1.0.6-alpha", path = "../premix-core", default-features = false }
-sqlx = { version = "0.8.6", features = ["runtime-tokio"] }
-syn = { version = "2.0.114", features = ["full"] }
-quote = "1.0.43"
-walkdir = "2.5.0"
-chrono = "0.4"
+clap = { version = "4.5.23", features = [
+    "derive",
+] } # สำหรับสร้าง Interface ของ CLI (คำสั่ง, ธง, พารามิเตอร์)
+tokio = { version = "1.49.0", features = [
+    "full",
+] } # Runtime สำหรับการทำงานแบบ Async
+premix-core = { version = "=1.0.7-alpha", path = "../premix-core", default-features = false } # ดึง Logic หลักของ ORM มาใช้
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio",
+] } # สำหรับคุยกับ DB ตอนทำ Migration
+syn = { version = "2.0.114", features = [
+    "full",
+] } # ใช้ Parser สำหรับฟีเจอร์ Scaffolding (อ่าน DB มาเป็น Struct)
+quote = "1.0.43" # ใช้สร้างโค้ด Rust สำหรับฟีเจอร์ Scaffolding
+walkdir = "2.5.0" # สำหรับค้นหาไฟล์ SQL Migration ในโฟลเดอร์ต่างๆ
+chrono = "0.4" # จัดการเวลาสำหรับตั้งชื่อไฟล์ Migration (Timestamp)
 
 [features]
 default = ["sqlite"]
