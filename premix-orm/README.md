@@ -25,7 +25,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = "1.0.6-alpha"
+premix-orm = "1.0.7-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -36,9 +36,20 @@ serde = { version = "1", features = ["derive"] }
 Enable database features on both `premix-orm` and `sqlx`:
 
 ```toml
-premix-orm = { version = "1.0.6-alpha", features = ["postgres"] }
+premix-orm = { version = "1.0.7-alpha", features = ["postgres", "axum"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
+
+## Feature Flags
+
+| Feature    | Description                                               |
+| :--------- | :-------------------------------------------------------- |
+| `sqlite`   | Enable SQLite support (default)                           |
+| `postgres` | Enable PostgreSQL support                                 |
+| `mysql`    | Enable MySQL support                                      |
+| `axum`     | Enable Axum integration (`PremixState`)                   |
+| `actix`    | Enable Actix-web integration (`PremixData`)               |
+| `metrics`  | Enable Prometheus metrics (`install_prometheus_recorder`) |
 
 ## Quick Start
 
@@ -77,6 +88,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - Application-level eager loading using batched queries
 - Optional soft delete support by `deleted_at` convention
 - SQLite, Postgres, and MySQL via `sqlx` feature flags
+- Axum and Actix-web integrations via feature flags
+- Prometheus metrics collection support
 
 ## Compatibility
 
