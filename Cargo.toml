@@ -1,28 +1,17 @@
 [workspace]
-resolver = "2"
 members = [
     "premix-core",
     "premix-macros",
-    "examples/basic-app",
-    "examples/axum-app",
-    "examples/relation-app",
-    "benchmarks",
-    "examples/eager-app",
-    "examples/transaction-app",
-    "examples/hooks-app",
-    "examples/tracing-app",
-    "examples/optimistic-locking-app",
-    "examples/validation-app",
-    "examples/soft-delete-app",
-    "examples/bulk-ops-app",
-    "premix-cli",
-    "examples/premix-axum-tutorial",
     "premix-orm",
-    "premix-axum",
+    "premix-cli",
     "premix-actix",
+    "premix-axum",
     "premix-metrics",
+    "benchmarks",
+    "examples/*",
 ]
 
+resolver = "2"
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 unwrap_used = "allow"
