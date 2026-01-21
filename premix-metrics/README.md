@@ -2,6 +2,10 @@
 
 Prometheus metrics helpers for Premix ORM.
 
+## Research Status
+
+This crate is part of an AI-assisted research prototype. APIs may change and production use is not recommended yet.
+
 ## Usage
 
 ```rust

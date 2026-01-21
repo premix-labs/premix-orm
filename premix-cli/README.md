@@ -6,7 +6,7 @@ The official command-line tool for **Premix ORM**.
 
 ## Research Status
 
-This crate is part of a research prototype. APIs may change and production use is not recommended yet.
+This crate is part of an AI-assisted research prototype. APIs may change and production use is not recommended yet.
 
 ## Installation
 
@@ -24,6 +24,7 @@ cargo install premix-cli
 ## Usage
 
 ### Initialize a Project
+
 Currently a placeholder for future scaffolding.
 
 ```bash
@@ -35,6 +36,7 @@ premix init
 Premix ORM supports SQL-based migrations. You can create, run, and revert them using the CLI.
 
 #### Create a Migration
+
 Creates a new `.sql` file in the `migrations/` directory with `up` and `down` steps.
 
 ```bash
@@ -43,6 +45,7 @@ premix migrate create create_users
 ```
 
 #### Run Migrations (Up)
+
 Applies all pending migrations to the database.
 
 ```bash
@@ -54,6 +57,7 @@ premix migrate up --database sqlite:my_app.db
 ```
 
 #### Revert Migration (Down)
+
 Reverts the last applied migration.
 
 ```bash
@@ -61,18 +65,21 @@ premix migrate down
 ```
 
 ### Sync Schema (Experimental)
+
 Synchronize your Rust `#[derive(Model)]` structs with the database schema implicitly.
 
 ```bash
 premix sync
 ```
+
 The CLI looks for `src/bin/premix-sync.rs` and runs it. Use that binary to
 call `Premix::sync` for the models you want to create.
 
-*Note: For robustness, we still recommend calling `Premix::sync(&pool)` in your
-application code on startup.*
+_Note: For robustness, we still recommend calling `Premix::sync(&pool)` in your
+application code on startup._
 
 ### Schema Diff (SQLite v1)
+
 Diff or generate migrations from local models (SQLite v1).
 
 ```bash

@@ -1,5 +1,8 @@
 # Getting Started
 
+> ⚠️ **Note:** Premix is an AI-assisted research prototype. APIs may change and
+> production use is not recommended. See [DISCLAIMER](../../DISCLAIMER.md).
+
 This chapter walks through a minimal but complete setup: dependencies, model
 definition, connection, schema sync, and a simple query.
 
@@ -139,4 +142,3 @@ premix migrate up
 - The CLI reads `DATABASE_URL` or defaults to `sqlite:premix.db`.
 - `premix migrate down` reverts the most recent migration.
 - `filter()`/`filter_raw()` accept raw SQL strings and require `.allow_unsafe()`; use carefully to avoid injection.
-

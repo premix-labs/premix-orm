@@ -6,7 +6,7 @@ This crate (`premix-orm`) is the official facade that re-exports `premix-core` a
 
 ## Research Status
 
-This crate is part of a research prototype. APIs may change and production use is not recommended yet.
+This crate is part of an AI-assisted research prototype. APIs may change and production use is not recommended yet.
 
 ## Requirements
 
@@ -111,4 +111,3 @@ let users = User::raw_sql("SELECT * FROM users WHERE active = 1")
 ## License
 
 This project is licensed under the MIT license.
-

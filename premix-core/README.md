@@ -3,6 +3,7 @@
 The foundational library for **Premix ORM**.
 
 `premix-core` provides the essential traits, types, and logic that power the ORM functionality. It includes:
+
 - Database abstraction traits (`SqlDialect`)
 - Executor logic (`IntoExecutor`, `Executor`)
 - Model traits (`Model`)
@@ -10,7 +11,7 @@ The foundational library for **Premix ORM**.
 
 ## Research Status
 
-This crate is part of a research prototype. APIs may change and production use is not recommended yet.
+This crate is part of an AI-assisted research prototype. APIs may change and production use is not recommended yet.
 
 ## Installation
 
@@ -53,4 +54,3 @@ async fn example() -> Result<(), sqlx::Error> {
 ## License
 
 This project is licensed under the [MIT license](LICENSE).
-

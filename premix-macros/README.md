@@ -6,7 +6,7 @@ This crate provides the `#[derive(Model)]` macro, which automatically implements
 
 ## Research Status
 
-This crate is part of a research prototype. APIs may change and production use is not recommended yet.
+This crate is part of an AI-assisted research prototype. APIs may change and production use is not recommended yet.
 
 ## Installation
 
@@ -34,6 +34,7 @@ pub struct User {
 ```
 
 This derives:
+
 - `table_name()`
 - `save()` (Create/Insert)
 - `find_by_id()`
@@ -44,4 +45,3 @@ This derives:
 ## License
 
 This project is licensed under the [MIT license](LICENSE).
-

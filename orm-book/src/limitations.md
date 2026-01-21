@@ -1,5 +1,8 @@
 # Limitations and Notes
 
+> ⚠️ **Note:** Premix is an AI-assisted research prototype. These limitations
+> reflect the current alpha state. See [DISCLAIMER](../../DISCLAIMER.md).
+
 This section documents current constraints so expectations are clear.
 
 ## Schema Generation

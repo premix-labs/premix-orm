@@ -13,12 +13,16 @@ currently being supported with security updates.
 
 ## Reporting a Vulnerability
 
-We take security seriously. If you discover a security vulnerability within **Premix ORM**, please follow these steps:
+> ⚠️ **Note:** Premix ORM is an AI-assisted research prototype and is not
+> recommended for production use. Security issues in experimental code may not
+> receive the same priority as production software.
 
-1.  **Do NOT open a public issue** on GitHub.
-2.  Email the vulnerability details to **[INSERT SECURITY EMAIL]**.
-3.  Include a proof of concept or reproduction steps if possible.
+If you discover a security vulnerability within **Premix ORM**, please follow these steps:
 
-We will acknowledge your report within 48 hours and provide an estimated timeline for a fix.
+1.  Open a GitHub issue with the `security` label describing the issue.
+2.  Include a proof of concept or reproduction steps if possible.
+3.  For sensitive vulnerabilities, you may use GitHub's private vulnerability reporting feature.
 
-Thank you for helping keep Premix ORM secure! 🛡️
+We will review your report and respond as time allows.
+
+Thank you for helping improve Premix ORM! 🛡️
