@@ -17,6 +17,6 @@ if (Test-Path "benchmark_errors.txt") {
     $errors = Get-Content "benchmark_errors.txt"
     if ($errors) {
         Write-Host "`nErrors detected:" -ForegroundColor Red
-        $errors | select -First 10
+        $errors | Select-Object -First 10
     }
 }
