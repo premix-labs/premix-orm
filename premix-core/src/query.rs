@@ -163,10 +163,10 @@ where
     pub fn new(executor: Executor<'a, DB>) -> Self {
         Self {
             executor,
-            filters: Vec::new(),
+            filters: Vec::with_capacity(4), // Pre-allocate for typical queries (1-4 filters)
             limit: None,
             offset: None,
-            includes: Vec::new(),
+            includes: Vec::with_capacity(2), // Pre-allocate for typical queries (1-2 includes)
             include_deleted: false,
             allow_unsafe: false,
             has_raw_filter: false,

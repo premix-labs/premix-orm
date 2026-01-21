@@ -179,8 +179,10 @@ impl<'q> RawQuery<'q> {
 }
 
 #[doc(hidden)]
+#[inline]
 pub fn build_placeholders<DB: SqlDialect>(start_index: usize, count: usize) -> String {
-    let mut out = String::new();
+    // Pre-allocate: each placeholder is ~4 chars ("$X, " or "?, ")
+    let mut out = String::with_capacity(count.saturating_mul(4));
     for i in 0..count {
         if i > 0 {
             out.push_str(", ");
