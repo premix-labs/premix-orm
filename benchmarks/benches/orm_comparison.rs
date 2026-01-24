@@ -5,6 +5,7 @@ use std::{
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use premix_core::{Executor, Model as PremixModel, Premix, UpdateResult};
+use premix_core::query::ColumnRef;
 use premix_macros::Model;
 use rbatis::RBatis;
 use sea_orm::{Database, QuerySelect, Set, TransactionTrait, entity::prelude::*};
@@ -46,6 +47,21 @@ struct UserSoft {
     id: i32,
     name: String,
     deleted_at: Option<String>,
+}
+
+#[derive(sqlx::FromRow)]
+struct UserRaw {
+    id: i32,
+    name: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct UserPostRaw {
+    user_id: i32,
+    user_name: String,
+    post_id: i32,
+    post_user_id: i32,
+    post_title: String,
 }
 
 // --- 2. SeaORM Entity ---
@@ -275,7 +291,7 @@ fn benchmark_select(c: &mut Criterion) {
     // 1. Raw SQLx
     group.bench_function("sqlx_raw", |b| {
         b.to_async(&rt).iter(|| async {
-            let _row = sqlx::query("SELECT * FROM user_raws WHERE id = $1")
+            let _row: UserRaw = sqlx::query_as("SELECT id, name FROM user_raws WHERE id = $1")
                 .bind(1)
                 .fetch_one(&pool)
                 .await
@@ -351,7 +367,7 @@ fn benchmark_bulk_select(c: &mut Criterion) {
     // 1. Raw SQLx
     group.bench_function("sqlx_raw", |b| {
         b.to_async(&rt).iter(|| async {
-            let _rows = sqlx::query("SELECT * FROM user_raws LIMIT 100")
+            let _rows: Vec<UserRaw> = sqlx::query_as("SELECT id, name FROM user_raws LIMIT 100")
                 .fetch_all(&pool)
                 .await
                 .unwrap();
@@ -478,7 +494,9 @@ fn benchmark_relation(c: &mut Criterion) {
 
     group.bench_function("sqlx_raw_join", |b| {
         b.to_async(&rt).iter(|| async {
-            let _rows = sqlx::query("SELECT u.*, p.* FROM user_raws u JOIN post_raws p ON u.id = p.user_id WHERE u.id = 1")
+            let _rows: Vec<UserPostRaw> = sqlx::query_as(
+                "SELECT u.id AS user_id, u.name AS user_name, p.id AS post_id, p.user_id AS post_user_id, p.title AS post_title FROM user_raws u JOIN post_raws p ON u.id = p.user_id WHERE u.id = 1",
+            )
                 .fetch_all(&pool)
                 .await
                 .unwrap();
@@ -502,7 +520,7 @@ fn benchmark_relation(c: &mut Criterion) {
         b.to_async(&rt).iter(|| async {
             let _users = <UserPremix as PremixModel<sqlx::Sqlite>>::find_in_pool(&pool)
                 .include("posts")
-                .filter_eq("id", 1)
+                .filter_eq(ColumnRef::static_str("id"), 1)
                 .limit(1)
                 .all()
                 .await
@@ -587,8 +605,8 @@ fn benchmark_bulk_relation(c: &mut Criterion) {
 
     group.bench_function("sqlx_raw_join", |b| {
         b.to_async(&rt).iter(|| async {
-            let _rows = sqlx::query(
-                "SELECT u.*, p.* FROM user_raws u JOIN post_raws p ON u.id = p.user_id",
+            let _rows: Vec<UserPostRaw> = sqlx::query_as(
+                "SELECT u.id AS user_id, u.name AS user_name, p.id AS post_id, p.user_id AS post_user_id, p.title AS post_title FROM user_raws u JOIN post_raws p ON u.id = p.user_id",
             )
             .fetch_all(&pool)
             .await
@@ -944,7 +962,7 @@ fn benchmark_bulk_ops(c: &mut Criterion) {
     group.bench_function("bulk_update_1000", |b| {
         b.to_async(&rt).iter(|| async {
             <UserPremix as PremixModel<sqlx::Sqlite>>::find_in_pool(&pool)
-                .filter_is_not_null("id")
+                .filter_is_not_null(ColumnRef::static_str("id"))
                 .update(serde_json::json!({ "name": "Updated Bulk" }))
                 .await
                 .unwrap();
