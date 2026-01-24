@@ -1,169 +1,42 @@
-Round,Group,Bench,MedianNs
-1,transactions,tx_diesel,2374.0800850460664
-1,transactions,tx_premix,14904.867003367002
-1,transactions,tx_rbatis,20389.389758179233
-1,transactions,tx_sea_orm,34347.30777632154
-1,transactions,tx_sqlx_raw,14832.146495237046
-1,soft delete,soft_delete_premix,24806.74132156142
-1,soft delete,soft_delete_sqlx_raw,25143.54047145143
-1,select (4-way),diesel,867.2528993851049
-1,select (4-way),premix_orm,11390.176483186977
-1,select (4-way),rbatis,14487.472135144548
-1,select (4-way),sea_orm,18909.147769764957
-1,select (4-way),sqlx_raw,11252.359880585516
-1,relation (1 user -_ 10 posts),premix_eager,34362.59725634726
-1,relation (1 user -_ 10 posts),premix_relation,33201.79725299211
-1,relation (1 user -_ 10 posts),rbatis_manual,41022.395904827266
-1,relation (1 user -_ 10 posts),sea_orm_relation,37472.54885866166
-1,relation (1 user -_ 10 posts),sqlx_raw_join,24482.21360109539
-1,optimistic locking,opt_lock_premix,26319.577360355906
-1,optimistic locking,opt_lock_sqlx_raw,25155.611266131848
-1,modify operations,delete_diesel,2830.6611153775675
-1,modify operations,delete_premix,24229.210317460318
-1,modify operations,delete_rbatis,27593.595406360422
-1,modify operations,delete_sea_orm,54906.94969715927
-1,modify operations,delete_sqlx_raw,22935.096636546186
-1,modify operations,update_diesel,4335.78070986903
-1,modify operations,update_premix,25359.20202020202
-1,modify operations,update_rbatis,29656.96575069693
-1,modify operations,update_sea_orm,108427.29275785657
-1,modify operations,update_sqlx_raw,23374.410468319562
-1,io select (postgres),premix,55419.60542837824
-1,io select (postgres),raw_sql,54681.93342693342
-1,io select (postgres),rbatis,55741.64682539683
-1,io select (postgres),sea_orm,63209.99793217535
-1,io insert (postgres),premix,106409.97968580715
-1,io insert (postgres),raw_sql,103373.41711650923
-1,io insert (postgres),rbatis,99541.54090909091
-1,io insert (postgres),sea_orm,107859.01369168356
-1,io concurrency (postgres),premix_10_concurrent_selects,179367.6536629901
-1,io concurrency (postgres),raw_sql_10_concurrent_selects,178664.67328699108
-1,insert (4-way),diesel,1794.2396732151005
-1,insert (4-way),premix_orm,12342.055116679936
-1,insert (4-way),rbatis,14987.395763769926
-1,insert (4-way),sea_orm,27686.581254476936
-1,insert (4-way),sqlx_raw,12059.771552056804
-1,bulk select 100 rows,diesel,13950.230802650158
-1,bulk select 100 rows,premix_orm_manual_map,93635.04685810405
-1,bulk select 100 rows,rbatis,96227.56987577639
-1,bulk select 100 rows,sea_orm,104272.11111111112
-1,bulk select 100 rows,sqlx_raw,70508.78548534798
-1,bulk relation (50 users -_ 500 posts),lazy_loading_100_users,1510128.7407407407
-1,bulk relation (50 users -_ 500 posts),premix_eager_batch,630165.6643356644
-1,bulk relation (50 users -_ 500 posts),rbatis_bulk_manual,541426.036036036
-1,bulk relation (50 users -_ 500 posts),sea_orm_relation_bulk,814355.2717391304
-1,bulk relation (50 users -_ 500 posts),sqlx_raw_join,490347.17881944444
-1,bulk operations (1000 rows),bulk_update_1000,55404.12591665798
-1,bulk operations (1000 rows),loop_update_1000,13572000.576923076
-2,transactions,tx_diesel,2374.0800850460664
-2,transactions,tx_premix,14889.941767634074
-2,transactions,tx_rbatis,20130.257777777777
-2,transactions,tx_sea_orm,33627.409214807
-2,transactions,tx_sqlx_raw,14805.963278619529
-2,soft delete,soft_delete_premix,24777.298226565326
-2,soft delete,soft_delete_sqlx_raw,24346.679810725553
-2,select (4-way),diesel,867.2528993851049
-2,select (4-way),premix_orm,11161.443278360819
-2,select (4-way),rbatis,15433.116723643365
-2,select (4-way),sea_orm,19825.013592866464
-2,select (4-way),sqlx_raw,11842.570306038047
-2,relation (1 user -_ 10 posts),premix_eager,34307.440386633694
-2,relation (1 user -_ 10 posts),premix_relation,32777.22039473684
-2,relation (1 user -_ 10 posts),rbatis_manual,41265.31360112756
-2,relation (1 user -_ 10 posts),sea_orm_relation,37404.13248337029
-2,relation (1 user -_ 10 posts),sqlx_raw_join,24175.00901622921
-2,optimistic locking,opt_lock_premix,26591.894308111296
-2,optimistic locking,opt_lock_sqlx_raw,23985.380183172303
-2,modify operations,delete_diesel,2830.6611153775675
-2,modify operations,delete_premix,24894.987090744937
-2,modify operations,delete_rbatis,26740.225133159915
-2,modify operations,delete_sea_orm,55029.19340924776
-2,modify operations,delete_sqlx_raw,22961.94914681153
-2,modify operations,update_diesel,4335.78070986903
-2,modify operations,update_premix,25241.41994546163
-2,modify operations,update_rbatis,27706.421067738233
-2,modify operations,update_sea_orm,110336.31336805556
-2,modify operations,update_sqlx_raw,23734.138067061143
-2,io select (postgres),premix,53424.19234360411
-2,io select (postgres),raw_sql,55015.14908312661
-2,io select (postgres),rbatis,53994.89943518391
-2,io select (postgres),sea_orm,61483.57228195938
-2,io insert (postgres),premix,102350.42997542997
-2,io insert (postgres),raw_sql,102788.11662645655
-2,io insert (postgres),rbatis,102468.7656641604
-2,io insert (postgres),sea_orm,109800.69204152249
-2,io concurrency (postgres),premix_10_concurrent_selects,178799.78034251675
-2,io concurrency (postgres),raw_sql_10_concurrent_selects,174448.9253393665
-2,insert (4-way),diesel,1794.2396732151005
-2,insert (4-way),premix_orm,12212.321296179725
-2,insert (4-way),rbatis,16068.95597745271
-2,insert (4-way),sea_orm,26966.30463337832
-2,insert (4-way),sqlx_raw,11546.21287878788
-2,bulk select 100 rows,diesel,13950.230802650158
-2,bulk select 100 rows,premix_orm_manual_map,94042.23602484472
-2,bulk select 100 rows,rbatis,93992.48911029287
-2,bulk select 100 rows,sea_orm,91867.38505747127
-2,bulk select 100 rows,sqlx_raw,70563.18152031455
-2,bulk relation (50 users -_ 500 posts),lazy_loading_100_users,1511947.342192691
-2,bulk relation (50 users -_ 500 posts),premix_eager_batch,627028.6057692308
-2,bulk relation (50 users -_ 500 posts),rbatis_bulk_manual,539497.1534391535
-2,bulk relation (50 users -_ 500 posts),sea_orm_relation_bulk,845475.4150702427
-2,bulk relation (50 users -_ 500 posts),sqlx_raw_join,526944.6732026143
-2,bulk operations (1000 rows),bulk_update_1000,55132.24239316239
-2,bulk operations (1000 rows),loop_update_1000,13290931.632653061
-3,transactions,tx_diesel,2374.0800850460664
-3,transactions,tx_premix,15282.02717948718
-3,transactions,tx_rbatis,21237.187400166124
-3,transactions,tx_sea_orm,33312.583244036985
-3,transactions,tx_sqlx_raw,14988.181300183878
-3,soft delete,soft_delete_premix,24862.81286894923
-3,soft delete,soft_delete_sqlx_raw,24374.13358633776
-3,select (4-way),diesel,867.2528993851049
-3,select (4-way),premix_orm,11139.444376286481
-3,select (4-way),rbatis,13943.71897810219
-3,select (4-way),sea_orm,22325.503495046258
-3,select (4-way),sqlx_raw,10697.594040968343
-3,relation (1 user -_ 10 posts),premix_eager,34722.61261261262
-3,relation (1 user -_ 10 posts),premix_relation,33349.79082150101
-3,relation (1 user -_ 10 posts),rbatis_manual,42644.996194316846
-3,relation (1 user -_ 10 posts),sea_orm_relation,37976.165678093894
-3,relation (1 user -_ 10 posts),sqlx_raw_join,24668.804608052837
-3,optimistic locking,opt_lock_premix,26077.291224134227
-3,optimistic locking,opt_lock_sqlx_raw,24743.050587634134
-3,modify operations,delete_diesel,2830.6611153775675
-3,modify operations,delete_premix,24304.231547702886
-3,modify operations,delete_rbatis,27806.97069820016
-3,modify operations,delete_sea_orm,51364.18572418572
-3,modify operations,delete_sqlx_raw,23439.96917061433
-3,modify operations,update_diesel,4335.78070986903
-3,modify operations,update_premix,25469.558498896247
-3,modify operations,update_rbatis,27945.49815498155
-3,modify operations,update_sea_orm,112195.84842162482
-3,modify operations,update_sqlx_raw,25207.54533188308
-3,io select (postgres),premix,54486.772864364306
-3,io select (postgres),raw_sql,54004.390625
-3,io select (postgres),rbatis,56657.42087830235
-3,io select (postgres),sea_orm,63473.53956228956
-3,io insert (postgres),premix,109782.96525096525
-3,io insert (postgres),raw_sql,101008.31462691928
-3,io insert (postgres),rbatis,99490.56140567582
-3,io insert (postgres),sea_orm,106584.3695464401
-3,io concurrency (postgres),premix_10_concurrent_selects,180969.49023199023
-3,io concurrency (postgres),raw_sql_10_concurrent_selects,181836.53657194512
-3,insert (4-way),diesel,1794.2396732151005
-3,insert (4-way),premix_orm,12744.49834263077
-3,insert (4-way),rbatis,14882.379193743389
-3,insert (4-way),sea_orm,26577.40778923253
-3,insert (4-way),sqlx_raw,11738.842177379174
-3,bulk select 100 rows,diesel,13950.230802650158
-3,bulk select 100 rows,premix_orm_manual_map,94104.7325631151
-3,bulk select 100 rows,rbatis,100998.81664388243
-3,bulk select 100 rows,sea_orm,97419.39873417722
-3,bulk select 100 rows,sqlx_raw,80705.14563106796
-3,bulk relation (50 users -_ 500 posts),lazy_loading_100_users,1618205.2602436324
-3,bulk relation (50 users -_ 500 posts),premix_eager_batch,641015.0501672241
-3,bulk relation (50 users -_ 500 posts),rbatis_bulk_manual,542233.748870822
-3,bulk relation (50 users -_ 500 posts),sea_orm_relation_bulk,883423.4230055658
-3,bulk relation (50 users -_ 500 posts),sqlx_raw_join,542038.6710239651
-3,bulk operations (1000 rows),bulk_update_1000,55489.43128247479
-3,bulk operations (1000 rows),loop_update_1000,13376574.19642857
+group,label,median_us
+orm,Bulk Operations (1000 Rows)/bulk_update_1000,95.958
+orm,Bulk Operations (1000 Rows)/loop_update_1000,65213
+orm,Bulk Relation (50 Users -> 500 Posts)/lazy_loading_100_users,3668.7
+orm,Bulk Relation (50 Users -> 500 Posts)/premix_eager_batch,9586.3
+orm,Bulk Relation (50 Users -> 500 Posts)/rbatis_bulk_manual,10068
+orm,Bulk Relation (50 Users -> 500 Posts)/sea_orm_relation_bulk,10059
+orm,Bulk Relation (50 Users -> 500 Posts)/sqlx_raw_join,9336
+orm,Bulk Select 100 Rows/premix_orm_manual_map,202.18
+orm,Bulk Select 100 Rows/rbatis,1166.2
+orm,Bulk Select 100 Rows/sea_orm,1263
+orm,Bulk Select 100 Rows/sqlx_raw,193.89
+orm,Insert (4-Way)/premix_orm,54.187
+orm,Modify Operations/delete_premix,109.01
+orm,Modify Operations/delete_rbatis,54.983
+orm,Modify Operations/delete_sea_orm,124.31
+orm,Modify Operations/delete_sqlx_raw,113.46
+orm,Modify Operations/update_premix,112.57
+orm,Modify Operations/update_rbatis,53.089
+orm,Modify Operations/update_sea_orm,237.8
+orm,Modify Operations/update_sqlx_raw,109.16
+orm,Optimistic Locking/opt_lock_premix,111.52
+orm,Optimistic Locking/opt_lock_sqlx_raw,110.77
+orm,Relation (1 User -> 10 Posts)/premix_eager,119.25
+orm,Relation (1 User -> 10 Posts)/premix_relation,119.04
+orm,Relation (1 User -> 10 Posts)/rbatis_manual,69.672
+orm,Relation (1 User -> 10 Posts)/sea_orm_relation,79.646
+orm,Relation (1 User -> 10 Posts)/sqlx_raw_join,65.515
+orm,Select (4-Way)/premix_orm,27.016
+orm,Soft Delete/soft_delete_premix,115.02
+orm,Soft Delete/soft_delete_sqlx_raw,110.84
+orm,Transactions/tx_sqlx_raw,44.399
+io,IO Concurrency (Postgres)/premix_10_concurrent_selects,549.73
+io,IO Concurrency (Postgres)/raw_sql_10_concurrent_selects,556.36
+io,IO Insert (Postgres)/premix,109.51
+io,IO Insert (Postgres)/raw_sql,103.95
+io,IO Insert (Postgres)/rbatis,95.241
+io,IO Insert (Postgres)/sea_orm,113.83
+io,IO Select (Postgres)/premix,63.456
+io,IO Select (Postgres)/raw_sql,62.064
+io,IO Select (Postgres)/rbatis,54.475
+io,IO Select (Postgres)/sea_orm,69.227
