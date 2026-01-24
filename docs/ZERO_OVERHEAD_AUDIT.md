@@ -11,7 +11,9 @@ Date: 2026-01-21 (local run)
 ## Executive Summary
 
 - Premix is close to raw sqlx for CRUD, but it is not strictly zero-overhead.
-- The hot path allocates small Strings and Vecs per query.
+- The hot path allocates small Strings and Vecs per query, though the new
+  `cached_placeholders` helper (premix-core/src/sql_cache.rs) eliminates repeated
+  `build_placeholders()` runs.
 - Eager loading uses a sorted Vec + binary_search (cache-friendly), but insert
   costs rise for large relation sets.
 - No dynamic dispatch in the normal query path; only stream uses BoxStream.
@@ -163,6 +165,8 @@ adds ~16% on this sample set.
 Low-risk optimizations:
 - Replace column/op Strings with Cow<'static, str> or enums (reduce allocs).
 - Use adaptive eager loading: Vec for small N, HashMap for large N.
+- Cache `build_placeholders()` strings per `(DB, count)` combination
+  (`premix-core::cached_placeholders`) to stop recomputing placeholder lists.
 - Expose an opt-in stream API without BoxStream for hot paths.
 
 ---

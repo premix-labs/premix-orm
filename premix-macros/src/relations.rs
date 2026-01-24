@@ -111,7 +111,7 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
 
                                 const CHUNK_SIZE: usize = 500;
                                 for chunk in ids.chunks(CHUNK_SIZE) {
-                                    let params = premix_orm::build_placeholders::<DB>(1, chunk.len());
+            let params = premix_orm::cached_placeholders::<DB>(chunk.len());
                                     let sql = format!(
                                         "SELECT * FROM {} WHERE {} IN ({})",
                                         #child_table,

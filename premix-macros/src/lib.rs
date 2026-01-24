@@ -555,7 +555,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
                 // We still need to calculate placeholders at runtime because they depend on the count and DB dialect
                 let count = if self.id == 0 { #field_names_no_id_len } else { #field_idents_len };
-                let placeholders = premix_orm::build_placeholders::<DB>(1, count);
+                let placeholders = premix_orm::cached_placeholders::<DB>(count);
 
                 let supports_returning = <DB as premix_orm::SqlDialect>::supports_returning();
                 if supports_returning {

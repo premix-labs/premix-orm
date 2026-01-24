@@ -46,6 +46,9 @@ pub use query::QueryBuilder;
 /// Database schema introspection and diffing utilities.
 pub mod schema;
 pub use schema::ModelSchema;
+/// Cache helpers for SQL snippets/placeholders.
+pub mod sql_cache;
+pub use sql_cache::cached_placeholders;
 
 /// Main entry point for the Premix ORM helpers.
 #[derive(Debug, Clone, Copy, Default)]
@@ -101,4 +104,5 @@ pub mod prelude {
     pub use crate::model::{Model, ModelHooks, ModelValidation, UpdateResult, ValidationError};
     pub use crate::query::QueryBuilder;
     pub use crate::schema::ModelSchema;
+    pub use crate::sql_cache::cached_placeholders;
 }
