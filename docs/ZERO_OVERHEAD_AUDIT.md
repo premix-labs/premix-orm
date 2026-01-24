@@ -172,6 +172,7 @@ Low-risk optimizations:
 - Use adaptive eager loading: Vec for small N, HashMap for large N.
 - Cache `build_placeholders()` strings per `(DB, count)` combination
   (`premix-core::cached_placeholders`) to stop recomputing placeholder lists.
+- Prefer `premix_query!` for hot paths to bypass runtime SQL generation.
 - Expose an opt-in stream API without BoxStream for hot paths.
 
 ---
