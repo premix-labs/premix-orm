@@ -40,7 +40,7 @@ metrics = { version = "0.22", optional = true }                     # เก็�
 metrics-exporter-prometheus = { version = "0.13", optional = true }
 futures-util = "0.3.31"
 async-stream = "0.3.6"
-once_cell = "1.22"
+smallvec = "1.11.2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

@@ -1,9 +1,10 @@
-use once_cell::sync::OnceLock;
+use std::sync::OnceLock;
 use std::{any::TypeId, collections::HashMap, sync::Mutex};
 
 use crate::dialect::SqlDialect;
 
-static PLACEHOLDER_CACHE: OnceLock<Mutex<HashMap<(TypeId, usize), Box<str>>>> = OnceLock::new();
+static PLACEHOLDER_CACHE: OnceLock<Mutex<HashMap<(TypeId, usize), &'static str>>> =
+    OnceLock::new();
 
 /// Returns a cached placeholder list for `(DB, count)` combinations.
 pub fn cached_placeholders<DB>(count: usize) -> &'static str
@@ -14,11 +15,11 @@ where
     let cache = PLACEHOLDER_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut guard = cache.lock().expect("placeholder cache poisoned");
     if let Some(value) = guard.get(&key) {
-        value.as_ref()
+        *value
     } else {
         let placeholders = crate::build_placeholders::<DB>(1, count);
-        let boxed = placeholders.into_boxed_str();
-        let entry = guard.entry(key).or_insert(boxed);
-        entry.as_ref()
+        let leaked: &'static str = Box::leak(placeholders.into_boxed_str());
+        guard.insert(key, leaked);
+        leaked
     }
 }

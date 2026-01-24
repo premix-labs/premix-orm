@@ -11,9 +11,10 @@ Date: 2026-01-21 (local run)
 ## Executive Summary
 
 - Premix is close to raw sqlx for CRUD, but it is not strictly zero-overhead.
-- The hot path allocates small Strings and Vecs per query, though the new
+- The hot path allocates small Strings per query, though the new
   `cached_placeholders` helper (premix-core/src/sql_cache.rs) eliminates repeated
-  `build_placeholders()` runs.
+  `build_placeholders()` runs, and bind buffers now use SmallVec to reduce heap
+  allocations for common filter counts.
 - Eager loading uses a sorted Vec + binary_search (cache-friendly), but insert
   costs rise for large relation sets.
 - No dynamic dispatch in the normal query path; only stream uses BoxStream.
@@ -56,6 +57,10 @@ Macro-generated SQL also uses runtime String building:
 - premix-macros/src/lib.rs: 214-290 (set_clause + format!)
 
 Impact: small but non-zero allocation pressure for each query.
+
+Recent changes:
+- QueryBuilder bind buffers now use SmallVec to avoid heap allocation for
+  small filter sets (common case).
 
 ---
 

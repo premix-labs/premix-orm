@@ -2,6 +2,7 @@ use crate::dialect::SqlDialect;
 use crate::executor::Executor;
 use crate::model::Model;
 use futures_util::StreamExt;
+use smallvec::{SmallVec, smallvec};
 use sqlx::{Database, IntoArguments};
 use std::time::{Duration, Instant};
 
@@ -160,7 +161,7 @@ pub(crate) enum FilterExpr {
     Compare {
         column: ColumnRef,
         op: FilterOp,
-        values: Vec<BindValue>,
+        values: SmallVec<[BindValue; 2]>,
     },
     NullCheck {
         column: ColumnRef,
@@ -309,7 +310,7 @@ where
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::Eq,
-            values: vec![value.into()],
+            values: smallvec![value.into()],
         });
         self
     }
@@ -319,7 +320,7 @@ where
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::Ne,
-            values: vec![value.into()],
+            values: smallvec![value.into()],
         });
         self
     }
@@ -329,7 +330,7 @@ where
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::Lt,
-            values: vec![value.into()],
+            values: smallvec![value.into()],
         });
         self
     }
@@ -339,7 +340,7 @@ where
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::Lte,
-            values: vec![value.into()],
+            values: smallvec![value.into()],
         });
         self
     }
@@ -349,7 +350,7 @@ where
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::Gt,
-            values: vec![value.into()],
+            values: smallvec![value.into()],
         });
         self
     }
@@ -359,17 +360,21 @@ where
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::Gte,
-            values: vec![value.into()],
+            values: smallvec![value.into()],
         });
         self
     }
 
     /// Adds a LIKE filter (`column LIKE value`).
-    pub fn filter_like(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
+    pub fn filter_like(
+        mut self,
+        column: impl Into<ColumnRef>,
+        value: impl Into<BindValue>,
+    ) -> Self {
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::Like,
-            values: vec![value.into()],
+            values: smallvec![value.into()],
         });
         self
     }
@@ -398,7 +403,7 @@ where
         I: IntoIterator<Item = V>,
         V: Into<BindValue>,
     {
-        let values = values.into_iter().map(Into::into).collect();
+        let values: SmallVec<[BindValue; 2]> = values.into_iter().map(Into::into).collect();
         self.filters.push(FilterExpr::Compare {
             column: column.into(),
             op: FilterOp::In,
@@ -409,7 +414,7 @@ where
 
     fn format_filters_for_log(&self) -> String {
         let sensitive_fields = T::sensitive_fields();
-        let mut clauses = Vec::new();
+        let mut clauses = Vec::with_capacity(self.filters.len() + 1);
 
         for filter in &self.filters {
             match filter {
@@ -519,7 +524,7 @@ where
         sql.push_str("SELECT * FROM ");
         sql.push_str(T::table_name());
 
-        let mut dummy_binds = Vec::new(); // Binds are not needed for to_sql, but render_where_clause_into requires it
+        let mut dummy_binds: SmallVec<[BindValue; 8]> = SmallVec::new();
         self.render_where_clause_into(&mut sql, &mut dummy_binds, 1);
 
         if let Some(limit) = self.limit {
@@ -557,7 +562,7 @@ where
             first = false;
         }
 
-        let mut dummy_binds = Vec::new(); // Binds are not needed for to_update_sql, but render_where_clause_into requires it
+        let mut dummy_binds: SmallVec<[BindValue; 8]> = SmallVec::new();
         self.render_where_clause_into(&mut sql, &mut dummy_binds, obj.len() + 1);
         Ok(sql)
     }
@@ -579,7 +584,7 @@ where
             let _ = write!(sql, "DELETE FROM {}", T::table_name());
         }
 
-        let mut dummy_binds = Vec::new(); // Binds are not needed for to_delete_sql, but render_where_clause_into requires it
+        let mut dummy_binds: SmallVec<[BindValue; 8]> = SmallVec::new();
         self.render_where_clause_into(&mut sql, &mut dummy_binds, 1);
         sql
     }
@@ -589,7 +594,7 @@ where
     fn render_where_clause_into(
         &self,
         sql: &mut String,
-        binds: &mut Vec<BindValue>,
+        binds: &mut SmallVec<[BindValue; 8]>,
         start_index: usize,
     ) {
         let mut idx = start_index;
@@ -650,7 +655,8 @@ where
                     if *is_null {
                         let _ = write!(sql, "{} IS NULL", DB::quote_identifier(column.as_str()));
                     } else {
-                        let _ = write!(sql, "{} IS NOT NULL", DB::quote_identifier(column.as_str()));
+                        let _ =
+                            write!(sql, "{} IS NOT NULL", DB::quote_identifier(column.as_str()));
                     }
                 }
             }
@@ -701,7 +707,8 @@ where
         sql.push_str("SELECT * FROM ");
         sql.push_str(T::table_name());
 
-        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
+        let mut where_binds: SmallVec<[BindValue; 8]> =
+            SmallVec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
         if let Some(limit) = self.limit {
@@ -772,7 +779,8 @@ where
         sql.push_str("SELECT * FROM ");
         sql.push_str(T::table_name());
 
-        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
+        let mut where_binds: SmallVec<[BindValue; 8]> =
+            SmallVec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
         if let Some(limit) = self.limit {
@@ -852,7 +860,8 @@ where
             first = false;
         }
 
-        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
+        let mut where_binds: SmallVec<[BindValue; 8]> =
+            SmallVec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, obj.len() + 1);
 
         if tracing::enabled!(tracing::Level::DEBUG) {
@@ -940,7 +949,8 @@ where
             let _ = write!(sql, "DELETE FROM {}", T::table_name());
         }
 
-        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
+        let mut where_binds: SmallVec<[BindValue; 8]> =
+            SmallVec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
         if tracing::enabled!(tracing::Level::DEBUG) {
