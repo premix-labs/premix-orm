@@ -211,23 +211,33 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let mut set_clause = String::new();
-                let mut i = 1usize;
-                #(
-                    if i > 1 {
-                        set_clause.push_str(", ");
-                    }
-                    set_clause.push_str(#field_names);
-                    set_clause.push_str(" = ");
-                    set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
-                    i += 1;
-                )*
-                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
-                let ver_p = <DB as premix_orm::SqlDialect>::placeholder(2 + #field_idents_len);
-                let sql = format!(
-                    "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
-                    table_name, set_clause, id_p, ver_p
-                );
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let ver_p = <DB as premix_orm::SqlDialect>::placeholder(2 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 64);
+                    use ::std::fmt::Write;
+                    let _ = write!(
+                        sql,
+                        "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
+                        table_name,
+                        set_clause,
+                        id_p,
+                        ver_p
+                    );
+                    sql
+                });
 
                 premix_orm::tracing::debug!(
                     operation = "update",
@@ -236,7 +246,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let mut query = premix_orm::sqlx::query::<DB>(&sql)
+                let mut query = premix_orm::sqlx::query::<DB>(sql)
                     #( .bind(&self.#field_idents) )*
                     .bind(&self.id)
                     .bind(&self.version);
@@ -244,9 +254,16 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 let result = executor.execute(query).await?;
 
                 if <DB as premix_orm::SqlDialect>::rows_affected(&result) == 0 {
-                    let exists_p = <DB as premix_orm::SqlDialect>::placeholder(1);
-                    let exists_sql = format!("SELECT id FROM {} WHERE id = {}", table_name, exists_p);
-                    let exists_query = premix_orm::sqlx::query_as::<DB, (i32,)>(&exists_sql).bind(&self.id);
+                    static EXISTS_SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                    let exists_sql = EXISTS_SQL.get_or_init(|| {
+                        let exists_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                        let mut exists_sql = String::with_capacity(table_name.len() + 32);
+                        use ::std::fmt::Write;
+                        let _ = write!(exists_sql, "SELECT id FROM {} WHERE id = {}", table_name, exists_p);
+                        exists_sql
+                    });
+                    let exists_query =
+                        premix_orm::sqlx::query_as::<DB, (i32,)>(exists_sql).bind(&self.id);
                     let exists = executor.fetch_optional(exists_query).await?;
 
                     if exists.is_none() {
@@ -275,19 +292,25 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let mut set_clause = String::new();
-                let mut i = 1usize;
-                #(
-                    if i > 1 {
-                        set_clause.push_str(", ");
-                    }
-                    set_clause.push_str(#field_names);
-                    set_clause.push_str(" = ");
-                    set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
-                    i += 1;
-                )*
-                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
-                let sql = format!("UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 32);
+                    use ::std::fmt::Write;
+                    let _ = write!(sql, "UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
+                    sql
+                });
 
                 premix_orm::tracing::debug!(
                     operation = "update",
@@ -296,7 +319,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let mut query = premix_orm::sqlx::query::<DB>(&sql)
+                let mut query = premix_orm::sqlx::query::<DB>(sql)
                     #( .bind(&self.#field_idents) )*
                     .bind(&self.id);
 
@@ -325,8 +348,20 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
-                let sql = format!("UPDATE {} SET deleted_at = {} WHERE id = {}", table_name, <DB as premix_orm::SqlDialect>::current_timestamp_fn(), id_p);
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                    let mut sql = String::with_capacity(table_name.len() + 64);
+                    use ::std::fmt::Write;
+                    let _ = write!(
+                        sql,
+                        "UPDATE {} SET deleted_at = {} WHERE id = {}",
+                        table_name,
+                        <DB as premix_orm::SqlDialect>::current_timestamp_fn(),
+                        id_p
+                    );
+                    sql
+                });
 
                 premix_orm::tracing::debug!(
                     operation = "delete",
@@ -335,7 +370,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let query = premix_orm::sqlx::query::<DB>(&sql).bind(&self.id);
+                let query = premix_orm::sqlx::query::<DB>(sql).bind(&self.id);
                 executor.execute(query).await?;
 
                 self.deleted_at = Some("DELETED".to_string());
@@ -357,8 +392,14 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 async move {
                 let mut executor = executor.into_executor();
                 let table_name = Self::table_name();
-                let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
-                let sql = format!("DELETE FROM {} WHERE id = {}", table_name, id_p);
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                    let mut sql = String::with_capacity(table_name.len() + 24);
+                    use ::std::fmt::Write;
+                    let _ = write!(sql, "DELETE FROM {} WHERE id = {}", table_name, id_p);
+                    sql
+                });
 
                 premix_orm::tracing::debug!(
                     operation = "delete",
@@ -367,7 +408,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let query = premix_orm::sqlx::query::<DB>(&sql).bind(&self.id);
+                let query = premix_orm::sqlx::query::<DB>(sql).bind(&self.id);
                 executor.execute(query).await?;
 
                 Ok(())

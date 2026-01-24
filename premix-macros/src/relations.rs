@@ -103,9 +103,11 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                 ids.sort_unstable();
                                 ids.dedup();
 
-                                // Use Vec instead of HashMap for better cache locality (O(log N) binary search)
+                                const GROUP_THRESHOLD: usize = 128;
+                                let use_hash_map = ids.len() > GROUP_THRESHOLD;
                                 let mut grouped: Vec<(i32, Vec<#child_model>)> =
                                     Vec::with_capacity(models.len());
+                                let mut grouped_map: Option<::std::collections::HashMap<i32, Vec<#child_model>>> = None;
 
                                 const CHUNK_SIZE: usize = 500;
                                 for chunk in ids.chunks(CHUNK_SIZE) {
@@ -121,24 +123,45 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                         query = query.bind(*id);
                                     }
                                     let children = executor.fetch_all(query).await?;
-                                    for child in children {
-                                        let fk = child.#parent_fk_ident;
-                                        // Use binary search to find insertion point (grouped is kept sorted)
-                                        match grouped.binary_search_by_key(&fk, |item| item.0) {
-                                            Ok(pos) => grouped[pos].1.push(child),
-                                            Err(pos) => grouped.insert(pos, (fk, vec![child])),
+                                    if use_hash_map {
+                                        let map = grouped_map
+                                            .get_or_insert_with(|| ::std::collections::HashMap::with_capacity(ids.len()));
+                                        for child in children {
+                                            let fk = child.#parent_fk_ident;
+                                            map.entry(fk).or_insert_with(Vec::new).push(child);
+                                        }
+                                    } else {
+                                        for child in children {
+                                            let fk = child.#parent_fk_ident;
+                                            // Use binary search to find insertion point (grouped is kept sorted)
+                                            match grouped.binary_search_by_key(&fk, |item| item.0) {
+                                                Ok(pos) => grouped[pos].1.push(child),
+                                                Err(pos) => grouped.insert(pos, (fk, vec![child])),
+                                            }
                                         }
                                     }
                                 }
 
                                 for model in models.iter_mut() {
-                                    // Binary search for model.id in sorted grouped Vec
-                                    if let Ok(idx) = grouped.binary_search_by_key(&model.id, |item| item.0) {
-                                        // Move Vec directly instead of cloning
-                                        let children = std::mem::take(&mut grouped[idx].1);
-                                        model.#field_name = Some(children);
+                                    if use_hash_map {
+                                        if let Some(map) = grouped_map.as_mut() {
+                                            if let Some(children) = map.remove(&model.id) {
+                                                model.#field_name = Some(children);
+                                            } else {
+                                                model.#field_name = Some(Vec::new());
+                                            }
+                                        } else {
+                                            model.#field_name = Some(Vec::new());
+                                        }
                                     } else {
-                                        model.#field_name = Some(Vec::new());
+                                        // Binary search for model.id in sorted grouped Vec
+                                        if let Ok(idx) = grouped.binary_search_by_key(&model.id, |item| item.0) {
+                                            // Move Vec directly instead of cloning
+                                            let children = std::mem::take(&mut grouped[idx].1);
+                                            model.#field_name = Some(children);
+                                        } else {
+                                            model.#field_name = Some(Vec::new());
+                                        }
                                     }
                                 }
                             },
@@ -157,9 +180,11 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                 ids.sort_unstable();
                                 ids.dedup();
 
-                                // Use Vec instead of HashMap for better cache locality (O(log N) binary search)
+                                const GROUP_THRESHOLD: usize = 128;
+                                let use_hash_map = ids.len() > GROUP_THRESHOLD;
                                 let mut grouped: Vec<(i32, Option<#parent_model>)> =
                                     Vec::with_capacity(ids.len());
+                                let mut grouped_map: Option<::std::collections::HashMap<i32, Option<#parent_model>>> = None;
 
                                 const CHUNK_SIZE: usize = 500;
                                 for chunk in ids.chunks(CHUNK_SIZE) {
@@ -174,22 +199,42 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                         query = query.bind(*id);
                                     }
                                     let parents = executor.fetch_all(query).await?;
-                                    for parent in parents {
-                                        // Use binary search to find insertion point (grouped is kept sorted)
-                                        match grouped.binary_search_by_key(&parent.id, |item| item.0) {
-                                            Ok(_) => {} // Skip duplicates (shouldn't happen with id)
-                                            Err(pos) => grouped.insert(pos, (parent.id, Some(parent))),
+                                    if use_hash_map {
+                                        let map = grouped_map
+                                            .get_or_insert_with(|| ::std::collections::HashMap::with_capacity(ids.len()));
+                                        for parent in parents {
+                                            map.entry(parent.id).or_insert(Some(parent));
+                                        }
+                                    } else {
+                                        for parent in parents {
+                                            // Use binary search to find insertion point (grouped is kept sorted)
+                                            match grouped.binary_search_by_key(&parent.id, |item| item.0) {
+                                                Ok(_) => {} // Skip duplicates (shouldn't happen with id)
+                                                Err(pos) => grouped.insert(pos, (parent.id, Some(parent))),
+                                            }
                                         }
                                     }
                                 }
 
                                 for model in models.iter_mut() {
-                                    // Binary search for model's foreign key in sorted grouped Vec
-                                    if let Ok(idx) = grouped.binary_search_by_key(&model.#fk_ident, |item| item.0) {
-                                        // Move value instead of cloning
-                                        model.#field_name = grouped[idx].1.take();
+                                    if use_hash_map {
+                                        if let Some(map) = grouped_map.as_mut() {
+                                            if let Some(entry) = map.get_mut(&model.#fk_ident) {
+                                                model.#field_name = entry.take();
+                                            } else {
+                                                model.#field_name = None;
+                                            }
+                                        } else {
+                                            model.#field_name = None;
+                                        }
                                     } else {
-                                        model.#field_name = None;
+                                        // Binary search for model's foreign key in sorted grouped Vec
+                                        if let Ok(idx) = grouped.binary_search_by_key(&model.#fk_ident, |item| item.0) {
+                                            // Move value instead of cloning
+                                            model.#field_name = grouped[idx].1.take();
+                                        } else {
+                                            model.#field_name = None;
+                                        }
                                     }
                                 }
                             },
