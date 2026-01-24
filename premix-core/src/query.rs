@@ -158,14 +158,86 @@ impl From<chrono::DateTime<chrono::Utc>> for BindValue {
 pub(crate) enum FilterExpr {
     Raw(String),
     Compare {
-        column: String,
-        op: String,
+        column: ColumnRef,
+        op: FilterOp,
         values: Vec<BindValue>,
     },
     NullCheck {
-        column: String,
+        column: ColumnRef,
         is_null: bool,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FilterOp {
+    Eq,
+    Ne,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    Like,
+    In,
+}
+
+impl FilterOp {
+    fn as_str(self) -> &'static str {
+        match self {
+            FilterOp::Eq => "=",
+            FilterOp::Ne => "!=",
+            FilterOp::Lt => "<",
+            FilterOp::Lte => "<=",
+            FilterOp::Gt => ">",
+            FilterOp::Gte => ">=",
+            FilterOp::Like => "LIKE",
+            FilterOp::In => "IN",
+        }
+    }
+
+    fn is_in(self) -> bool {
+        matches!(self, FilterOp::In)
+    }
+}
+
+/// Column reference used in filters (static literals or owned names).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ColumnRef {
+    /// Static column name known at compile time.
+    Static(&'static str),
+    /// Owned column name created at runtime.
+    Owned(String),
+}
+
+impl ColumnRef {
+    /// Builds a static column reference without allocation.
+    pub const fn static_str(value: &'static str) -> Self {
+        ColumnRef::Static(value)
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            ColumnRef::Static(value) => value,
+            ColumnRef::Owned(value) => value,
+        }
+    }
+}
+
+impl From<&str> for ColumnRef {
+    fn from(value: &str) -> Self {
+        ColumnRef::Owned(value.to_string())
+    }
+}
+
+impl From<String> for ColumnRef {
+    fn from(value: String) -> Self {
+        ColumnRef::Owned(value)
+    }
+}
+
+impl From<&String> for ColumnRef {
+    fn from(value: &String) -> Self {
+        ColumnRef::Owned(value.clone())
+    }
 }
 
 /// A type-safe SQL query builder.
@@ -233,103 +305,103 @@ where
     }
 
     /// Adds an equality filter (`column = value`).
-    pub fn filter_eq(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+    pub fn filter_eq(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: "=".to_string(),
+            column: column.into(),
+            op: FilterOp::Eq,
             values: vec![value.into()],
         });
         self
     }
 
     /// Adds a not-equal filter (`column != value`).
-    pub fn filter_ne(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+    pub fn filter_ne(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: "!=".to_string(),
+            column: column.into(),
+            op: FilterOp::Ne,
             values: vec![value.into()],
         });
         self
     }
 
     /// Adds a less-than filter (`column < value`).
-    pub fn filter_lt(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+    pub fn filter_lt(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: "<".to_string(),
+            column: column.into(),
+            op: FilterOp::Lt,
             values: vec![value.into()],
         });
         self
     }
 
     /// Adds a less-than-or-equal filter (`column <= value`).
-    pub fn filter_lte(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+    pub fn filter_lte(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: "<=".to_string(),
+            column: column.into(),
+            op: FilterOp::Lte,
             values: vec![value.into()],
         });
         self
     }
 
     /// Adds a greater-than filter (`column > value`).
-    pub fn filter_gt(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+    pub fn filter_gt(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: ">".to_string(),
+            column: column.into(),
+            op: FilterOp::Gt,
             values: vec![value.into()],
         });
         self
     }
 
     /// Adds a greater-than-or-equal filter (`column >= value`).
-    pub fn filter_gte(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+    pub fn filter_gte(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: ">=".to_string(),
+            column: column.into(),
+            op: FilterOp::Gte,
             values: vec![value.into()],
         });
         self
     }
 
     /// Adds a LIKE filter (`column LIKE value`).
-    pub fn filter_like(mut self, column: &str, value: impl Into<BindValue>) -> Self {
+    pub fn filter_like(mut self, column: impl Into<ColumnRef>, value: impl Into<BindValue>) -> Self {
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: "LIKE".to_string(),
+            column: column.into(),
+            op: FilterOp::Like,
             values: vec![value.into()],
         });
         self
     }
 
     /// Filters rows where the column IS NULL.
-    pub fn filter_is_null(mut self, column: &str) -> Self {
+    pub fn filter_is_null(mut self, column: impl Into<ColumnRef>) -> Self {
         self.filters.push(FilterExpr::NullCheck {
-            column: column.to_string(),
+            column: column.into(),
             is_null: true,
         });
         self
     }
 
     /// Filters rows where the column IS NOT NULL.
-    pub fn filter_is_not_null(mut self, column: &str) -> Self {
+    pub fn filter_is_not_null(mut self, column: impl Into<ColumnRef>) -> Self {
         self.filters.push(FilterExpr::NullCheck {
-            column: column.to_string(),
+            column: column.into(),
             is_null: false,
         });
         self
     }
 
     /// Adds an IN filter (`column IN (values...)`).
-    pub fn filter_in<I, V>(mut self, column: &str, values: I) -> Self
+    pub fn filter_in<I, V>(mut self, column: impl Into<ColumnRef>, values: I) -> Self
     where
         I: IntoIterator<Item = V>,
         V: Into<BindValue>,
     {
         let values = values.into_iter().map(Into::into).collect();
         self.filters.push(FilterExpr::Compare {
-            column: column.to_string(),
-            op: "IN".to_string(),
+            column: column.into(),
+            op: FilterOp::In,
             values,
         });
         self
@@ -345,8 +417,9 @@ where
                     clauses.push("RAW(<redacted>)".to_string());
                 }
                 FilterExpr::Compare { column, op, values } => {
-                    let is_sensitive = sensitive_fields.iter().any(|&f| f == column);
-                    if op == "IN" {
+                    let column_name = column.as_str();
+                    let is_sensitive = sensitive_fields.iter().any(|&f| f == column_name);
+                    if op.is_in() {
                         if values.is_empty() {
                             clauses.push("1=0".to_string());
                             continue;
@@ -362,7 +435,7 @@ where
                             })
                             .collect::<Vec<_>>()
                             .join(", ");
-                        clauses.push(format!("{} IN ({})", column, rendered));
+                        clauses.push(format!("{} IN ({})", column_name, rendered));
                     } else {
                         let rendered = if is_sensitive {
                             "***".to_string()
@@ -371,14 +444,14 @@ where
                         } else {
                             "NULL".to_string()
                         };
-                        clauses.push(format!("{} {} {}", column, op, rendered));
+                        clauses.push(format!("{} {} {}", column_name, op.as_str(), rendered));
                     }
                 }
                 FilterExpr::NullCheck { column, is_null } => {
                     if *is_null {
-                        clauses.push(format!("{} IS NULL", column));
+                        clauses.push(format!("{} IS NULL", column.as_str()));
                     } else {
-                        clauses.push(format!("{} IS NOT NULL", column));
+                        clauses.push(format!("{} IS NOT NULL", column.as_str()));
                     }
                 }
             }
@@ -389,6 +462,20 @@ where
         }
 
         clauses.join(" AND ")
+    }
+
+    fn estimate_bind_count(&self) -> usize {
+        let mut count = 0usize;
+        for filter in &self.filters {
+            if let FilterExpr::Compare { op, values, .. } = filter {
+                if op.is_in() {
+                    count = count.saturating_add(values.len());
+                } else {
+                    count = count.saturating_add(1);
+                }
+            }
+        }
+        count
     }
 
     /// Limits the number of rows returned by the query.
@@ -526,14 +613,14 @@ where
                     sql.push_str(condition);
                 }
                 FilterExpr::Compare { column, op, values } => {
-                    if op == "IN" {
+                    if op.is_in() {
                         if values.is_empty() {
                             append_and(sql);
                             sql.push_str("1=0");
                             continue;
                         }
                         append_and(sql);
-                        let _ = write!(sql, "{} IN (", DB::quote_identifier(column));
+                        let _ = write!(sql, "{} IN (", DB::quote_identifier(column.as_str()));
                         for (i, v) in values.iter().enumerate() {
                             if i > 0 {
                                 sql.push_str(", ");
@@ -548,8 +635,8 @@ where
                         let _ = write!(
                             sql,
                             "{} {} {}",
-                            DB::quote_identifier(column),
-                            op,
+                            DB::quote_identifier(column.as_str()),
+                            op.as_str(),
                             DB::placeholder(idx)
                         );
                         idx += 1;
@@ -561,9 +648,9 @@ where
                 FilterExpr::NullCheck { column, is_null } => {
                     append_and(sql);
                     if *is_null {
-                        let _ = write!(sql, "{} IS NULL", DB::quote_identifier(column));
+                        let _ = write!(sql, "{} IS NULL", DB::quote_identifier(column.as_str()));
                     } else {
-                        let _ = write!(sql, "{} IS NOT NULL", DB::quote_identifier(column));
+                        let _ = write!(sql, "{} IS NOT NULL", DB::quote_identifier(column.as_str()));
                     }
                 }
             }
@@ -614,7 +701,7 @@ where
         sql.push_str("SELECT * FROM ");
         sql.push_str(T::table_name());
 
-        let mut where_binds = Vec::with_capacity(self.filters.len());
+        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
         if let Some(limit) = self.limit {
@@ -627,14 +714,16 @@ where
             let _ = write!(sql, " OFFSET {}", offset);
         }
 
-        // Only log in debug builds to avoid overhead in release
         #[cfg(debug_assertions)]
-        tracing::debug!(
-            operation = "select",
-            sql = %sql,
-            filters = %self.format_filters_for_log(),
-            "premix query"
-        );
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let filters = self.format_filters_for_log();
+            tracing::debug!(
+                operation = "select",
+                sql = %sql,
+                filters = %filters,
+                "premix query"
+            );
+        }
 
         let start = Instant::now();
         let mut results: Vec<T> = match &mut self.executor {
@@ -683,7 +772,7 @@ where
         sql.push_str("SELECT * FROM ");
         sql.push_str(T::table_name());
 
-        let mut where_binds = Vec::with_capacity(self.filters.len());
+        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
         if let Some(limit) = self.limit {
@@ -697,12 +786,15 @@ where
         }
 
         #[cfg(debug_assertions)]
-        tracing::debug!(
-            operation = "stream",
-            sql = %sql,
-            filters = %self.format_filters_for_log(),
-            "premix query"
-        );
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let filters = self.format_filters_for_log();
+            tracing::debug!(
+                operation = "stream",
+                sql = %sql,
+                filters = %filters,
+                "premix query"
+            );
+        }
 
         let executor = self.executor;
         Ok(Box::pin(async_stream::try_stream! {
@@ -760,15 +852,18 @@ where
             first = false;
         }
 
-        let mut where_binds = Vec::new();
+        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, obj.len() + 1);
 
-        tracing::debug!(
-            operation = "bulk_update",
-            sql = %sql,
-            filters = %self.format_filters_for_log(),
-            "premix query"
-        );
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let filters = self.format_filters_for_log();
+            tracing::debug!(
+                operation = "bulk_update",
+                sql = %sql,
+                filters = %filters,
+                "premix query"
+            );
+        }
         let mut query = sqlx::query::<DB>(&sql);
         for val in obj.values() {
             match val {
@@ -845,15 +940,18 @@ where
             let _ = write!(sql, "DELETE FROM {}", T::table_name());
         }
 
-        let mut where_binds = Vec::new();
+        let mut where_binds = Vec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
-        tracing::debug!(
-            operation = "bulk_delete",
-            sql = %sql,
-            filters = %self.format_filters_for_log(),
-            "premix query"
-        );
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let filters = self.format_filters_for_log();
+            tracing::debug!(
+                operation = "bulk_delete",
+                sql = %sql,
+                filters = %filters,
+                "premix query"
+            );
+        }
         let start = Instant::now();
         let result = match &mut self.executor {
             Executor::Pool(pool) => {
