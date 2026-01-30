@@ -13,12 +13,14 @@ pub struct Migration {
     pub down_sql: String,
 }
 
+#[cfg_attr(not(any(feature = "sqlite", feature = "postgres")), allow(dead_code))]
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct AppliedMigration {
     version: String,
 }
 
 /// A migration manager for applying and rolling back migrations.
+#[cfg_attr(not(any(feature = "sqlite", feature = "postgres")), allow(dead_code))]
 pub struct Migrator<DB: Database> {
     pool: Pool<DB>,
 }

@@ -17,8 +17,8 @@ mod static_query;
 /// ```ignore
 /// use premix_orm::prelude::*;
 ///
-/// // SELECT
-/// let user = premix_query!(User, SELECT, filter_eq("id", 1), limit(1))
+/// // FIND (SELECT + LIMIT 1)
+/// let user = premix_query!(User, FIND, filter_eq("id", 1))
 ///     .fetch_one(&pool).await?;
 ///
 /// // INSERT
@@ -29,22 +29,31 @@ mod static_query;
 /// ).fetch_one(&pool).await?;
 ///
 /// // UPDATE
-/// let updated = premix_query!(
+/// premix_query!(
 ///     User, UPDATE,
 ///     set("age", 31),
 ///     filter_eq("name", "Bob")
-/// ).fetch_one(&pool).await?;
+/// ).execute(&pool).await?;
 ///
 /// // DELETE
-/// let deleted = premix_query!(
+/// premix_query!(
 ///     User, DELETE,
 ///     filter_eq("id", 1)
 /// ).execute(&pool).await?;
+///
+/// // UPDATE + RETURNING *
+/// let updated = premix_query!(
+///     User, UPDATE,
+///     set("age", 32),
+///     filter_eq("name", "Bob"),
+///     returning_all()
+/// ).fetch_one(&pool).await?;
 /// ```
 ///
 /// # Supported Operations
 ///
 /// - `SELECT` - Generate SELECT query
+/// - `FIND` - Generate SELECT + LIMIT 1 query
 /// - `INSERT` - Generate INSERT query (with `set` assignments)
 /// - `UPDATE` - Generate UPDATE query (with `set` assignments and filters)
 /// - `DELETE` - Generate DELETE query (with filters)
@@ -55,6 +64,7 @@ mod static_query;
 /// - `set("col", val)` - SET/VALUES clause for INSERT/UPDATE
 /// - `limit(N)` - LIMIT N
 /// - `offset(N)` - OFFSET N
+/// - `returning_all()` - Append `RETURNING *` for UPDATE/DELETE
 #[proc_macro]
 pub fn premix_query(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as static_query::StaticQueryInput);
@@ -246,7 +256,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let mut query = premix_orm::sqlx::query::<DB>(sql)
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
                     #( .bind(&self.#field_idents) )*
                     .bind(&self.id)
                     .bind(&self.version);
@@ -263,7 +273,9 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                         exists_sql
                     });
                     let exists_query =
-                        premix_orm::sqlx::query_as::<DB, (i32,)>(exists_sql).bind(&self.id);
+                        premix_orm::sqlx::query_as::<DB, (i32,)>(exists_sql)
+                            .persistent(true)
+                            .bind(&self.id);
                     let exists = executor.fetch_optional(exists_query).await?;
 
                     if exists.is_none() {
@@ -276,6 +288,91 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     Ok(premix_orm::UpdateResult::Success)
                 }
                 }
+            }
+
+            fn update_fast<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<
+                Output = Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>,
+            > + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let ver_p = <DB as premix_orm::SqlDialect>::placeholder(2 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 64);
+                    use ::std::fmt::Write;
+                    let _ = write!(
+                        sql,
+                        "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
+                        table_name,
+                        set_clause,
+                        id_p,
+                        ver_p
+                    );
+                    sql
+                });
+
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
+                    #( .bind(&self.#field_idents) )*
+                    .bind(&self.id)
+                    .bind(&self.version);
+
+                let result = executor.execute(query).await?;
+
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) == 0 {
+                    static EXISTS_SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                    let exists_sql = EXISTS_SQL.get_or_init(|| {
+                        let exists_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                        let mut exists_sql = String::with_capacity(table_name.len() + 32);
+                        use ::std::fmt::Write;
+                        let _ = write!(exists_sql, "SELECT id FROM {} WHERE id = {}", table_name, exists_p);
+                        exists_sql
+                    });
+                    let exists_query =
+                        premix_orm::sqlx::query_as::<DB, (i32,)>(exists_sql)
+                            .persistent(true)
+                            .bind(&self.id);
+                    let exists = executor.fetch_optional(exists_query).await?;
+
+                    if exists.is_none() {
+                        Ok(premix_orm::UpdateResult::NotFound)
+                    } else {
+                        Ok(premix_orm::UpdateResult::VersionConflict)
+                    }
+                } else {
+                    self.version += 1;
+                    Ok(premix_orm::UpdateResult::Success)
+                }
+                }
+            }
+            fn update_ultra<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<
+                Output = Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>,
+            > + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move { self.update_fast(executor).await }
             }
         }
     } else {
@@ -319,7 +416,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let mut query = premix_orm::sqlx::query::<DB>(sql)
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
                     #( .bind(&self.#field_idents) )*
                     .bind(&self.id);
 
@@ -331,6 +428,63 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     Ok(premix_orm::UpdateResult::Success)
                 }
                 }
+            }
+
+            fn update_fast<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<
+                Output = Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>,
+            > + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 32);
+                    use ::std::fmt::Write;
+                    let _ = write!(sql, "UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
+                    sql
+                });
+
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
+                    #( .bind(&self.#field_idents) )*
+                    .bind(&self.id);
+
+                let result = executor.execute(query).await?;
+
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) == 0 {
+                    Ok(premix_orm::UpdateResult::NotFound)
+                } else {
+                    Ok(premix_orm::UpdateResult::Success)
+                }
+                }
+            }
+            fn update_ultra<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<
+                Output = Result<premix_orm::UpdateResult, premix_orm::sqlx::Error>,
+            > + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move { self.update_fast(executor).await }
             }
         }
     };
@@ -370,12 +524,55 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let query = premix_orm::sqlx::query::<DB>(sql).bind(&self.id);
+                let query = premix_orm::sqlx::query::<DB>(sql).persistent(true).bind(&self.id);
                 executor.execute(query).await?;
 
                 self.deleted_at = Some("DELETED".to_string());
                 Ok(())
                 }
+            }
+            fn delete_fast<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                    let mut sql = String::with_capacity(table_name.len() + 64);
+                    use ::std::fmt::Write;
+                    let _ = write!(
+                        sql,
+                        "UPDATE {} SET deleted_at = {} WHERE id = {}",
+                        table_name,
+                        <DB as premix_orm::SqlDialect>::current_timestamp_fn(),
+                        id_p
+                    );
+                    sql
+                });
+
+                let query = premix_orm::sqlx::query::<DB>(sql).persistent(true).bind(&self.id);
+                executor.execute(query).await?;
+
+                self.deleted_at = Some("DELETED".to_string());
+                Ok(())
+                }
+            }
+            fn delete_ultra<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move { self.delete_fast(executor).await }
             }
             fn has_soft_delete() -> bool { true }
         }
@@ -408,11 +605,47 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     "premix query"
                 );
 
-                let query = premix_orm::sqlx::query::<DB>(sql).bind(&self.id);
+                let query = premix_orm::sqlx::query::<DB>(sql).persistent(true).bind(&self.id);
                 executor.execute(query).await?;
 
                 Ok(())
                 }
+            }
+            fn delete_fast<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move {
+                let mut executor = executor.into_executor();
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                    let mut sql = String::with_capacity(table_name.len() + 24);
+                    use ::std::fmt::Write;
+                    let _ = write!(sql, "DELETE FROM {} WHERE id = {}", table_name, id_p);
+                    sql
+                });
+
+                let query = premix_orm::sqlx::query::<DB>(sql).persistent(true).bind(&self.id);
+                executor.execute(query).await?;
+
+                Ok(())
+                }
+            }
+            fn delete_ultra<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = Result<(), premix_orm::sqlx::Error>>
+            + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move { self.delete_fast(executor).await }
             }
             fn has_soft_delete() -> bool { false }
         }
@@ -533,6 +766,23 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 &[ #( #sensitive_field_literals ),* ]
             }
 
+            fn from_row_fast(row: &<DB as premix_orm::sqlx::Database>::Row) -> Result<Self, premix_orm::sqlx::Error>
+            where
+                usize: premix_orm::sqlx::ColumnIndex<<DB as premix_orm::sqlx::Database>::Row>,
+                for<'c> &'c str: premix_orm::sqlx::ColumnIndex<<DB as premix_orm::sqlx::Database>::Row>,
+            {
+                use premix_orm::sqlx::Row;
+                let mut idx: usize = 0;
+                #(
+                    let #field_idents = row.try_get(idx)?;
+                    idx += 1;
+                )*
+                Ok(Self {
+                    #( #field_idents, )*
+                    #( #ignored_field_idents: None, )*
+                })
+            }
+
             fn save<'a, E>(
                 &'a mut self,
                 executor: E,
@@ -574,7 +824,8 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                         "premix query"
                     );
 
-                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(&sql);
+                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(&sql)
+                        .persistent(true);
                     #(
                         if #field_names != "id" {
                             query = query.bind(&self.#field_idents);
@@ -601,7 +852,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                         "premix query"
                     );
 
-                    let mut query = premix_orm::sqlx::query::<DB>(&sql);
+                    let mut query = premix_orm::sqlx::query::<DB>(&sql).persistent(true);
                     #(
                         if #field_names != "id" {
                             query = query.bind(&self.#field_idents);
@@ -618,6 +869,125 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 }
 
                 self.after_save().await?;
+                Ok(())
+                }
+            }
+
+            fn save_fast<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = ::std::result::Result<(), premix_orm::sqlx::Error>>
+            + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move {
+                let mut executor = executor.into_executor();
+
+                // CONSTANT column lists to avoid runtime joining/allocation
+                // We use head/tail pattern to insert ", " separator without trailing comma
+                const ALL_COLUMNS_LIST: &str = concat!(#all_cols_head, #( ", ", #all_cols_tail ),*);
+                const NO_ID_COLUMNS_LIST: &str = concat!(#no_id_cols_head, #( ", ", #no_id_cols_tail ),*);
+
+                let column_list: &str = if self.id == 0 { NO_ID_COLUMNS_LIST } else { ALL_COLUMNS_LIST };
+
+                // We still need to calculate placeholders at runtime because they depend on the count and DB dialect
+                let count = if self.id == 0 { #field_names_no_id_len } else { #field_idents_len };
+                let placeholders = premix_orm::cached_placeholders::<DB>(count);
+
+                let supports_returning = <DB as premix_orm::SqlDialect>::supports_returning();
+                if supports_returning {
+                    let sql = format!(
+                        "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
+                        #table_name,
+                        column_list,
+                        placeholders
+                    );
+
+                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(&sql)
+                        .persistent(true);
+                    #(
+                        if #field_names != "id" {
+                            query = query.bind(&self.#field_idents);
+                        } else if self.id != 0 {
+                            query = query.bind(&self.id);
+                        }
+                    )*
+
+                    if let Some((id,)) = executor.fetch_optional(query).await? {
+                        self.id = id;
+                    }
+                } else {
+                    let sql = format!(
+                        "INSERT INTO {} ({}) VALUES ({})",
+                        #table_name,
+                        column_list,
+                        placeholders
+                    );
+
+                    let mut query = premix_orm::sqlx::query::<DB>(&sql).persistent(true);
+                    #(
+                        if #field_names != "id" {
+                            query = query.bind(&self.#field_idents);
+                        } else if self.id != 0 {
+                            query = query.bind(&self.id);
+                        }
+                    )*
+
+                    let result = executor.execute(query).await?;
+                    let last_id = <DB as premix_orm::SqlDialect>::last_insert_id(&result);
+                    if last_id > 0 {
+                        self.id = last_id as i32;
+                    }
+                }
+
+                Ok(())
+                }
+            }
+            fn save_ultra<'a, E>(
+                &'a mut self,
+                executor: E,
+            ) -> impl ::std::future::Future<Output = ::std::result::Result<(), premix_orm::sqlx::Error>>
+            + Send
+            where
+                E: premix_orm::IntoExecutor<'a, DB = DB>
+            {
+                async move {
+                let mut executor = executor.into_executor();
+
+                // CONSTANT column lists to avoid runtime joining/allocation
+                // We use head/tail pattern to insert ", " separator without trailing comma
+                const ALL_COLUMNS_LIST: &str = concat!(#all_cols_head, #( ", ", #all_cols_tail ),*);
+                const NO_ID_COLUMNS_LIST: &str = concat!(#no_id_cols_head, #( ", ", #no_id_cols_tail ),*);
+
+                let column_list: &str = if self.id == 0 { NO_ID_COLUMNS_LIST } else { ALL_COLUMNS_LIST };
+
+                // We still need to calculate placeholders at runtime because they depend on the count and DB dialect
+                let count = if self.id == 0 { #field_names_no_id_len } else { #field_idents_len };
+                let placeholders = premix_orm::cached_placeholders::<DB>(count);
+
+                let sql = format!(
+                    "INSERT INTO {} ({}) VALUES ({})",
+                    #table_name,
+                    column_list,
+                    placeholders
+                );
+
+                let mut query = premix_orm::sqlx::query::<DB>(&sql).persistent(true);
+                #(
+                    if #field_names != "id" {
+                        query = query.bind(&self.#field_idents);
+                    } else if self.id != 0 {
+                        query = query.bind(&self.id);
+                    }
+                )*
+
+                let result = executor.execute(query).await?;
+                let last_id = <DB as premix_orm::SqlDialect>::last_insert_id(&result);
+                if last_id > 0 {
+                    self.id = last_id as i32;
+                }
+
                 Ok(())
                 }
             }
@@ -650,7 +1020,9 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                     sql = %sql,
                     "premix query"
                 );
-                let query = premix_orm::sqlx::query_as::<DB, Self>(&sql).bind(id);
+                let query = premix_orm::sqlx::query_as::<DB, Self>(&sql)
+                    .persistent(true)
+                    .bind(id);
                 executor.fetch_optional(query).await
                 }
             }

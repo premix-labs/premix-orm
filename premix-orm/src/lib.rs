@@ -111,7 +111,7 @@ pub use premix_macros::Model;
 /// ```ignore
 /// use premix_orm::prelude::*;
 ///
-/// let user = premix_query!(User, SELECT, filter_eq("id", user_id), limit(1))
+/// let user = premix_query!(User, FIND, filter_eq("id", user_id))
 ///     .fetch_one(&pool)
 ///     .await?;
 /// ```

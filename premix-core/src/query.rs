@@ -98,6 +98,36 @@ where
     }
 }
 
+#[inline]
+fn apply_persistent_query_as<'q, DB, T>(
+    query: sqlx::query::QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>,
+    prepared: bool,
+) -> sqlx::query::QueryAs<'q, DB, T, <DB as Database>::Arguments<'q>>
+where
+    DB: Database + sqlx::database::HasStatementCache,
+{
+    if prepared {
+        query.persistent(true)
+    } else {
+        query
+    }
+}
+
+#[inline]
+fn apply_persistent_query<'q, DB>(
+    query: sqlx::query::Query<'q, DB, <DB as Database>::Arguments<'q>>,
+    prepared: bool,
+) -> sqlx::query::Query<'q, DB, <DB as Database>::Arguments<'q>>
+where
+    DB: Database + sqlx::database::HasStatementCache,
+{
+    if prepared {
+        query.persistent(true)
+    } else {
+        query
+    }
+}
+
 impl From<String> for BindValue {
     fn from(value: String) -> Self {
         Self::String(value)
@@ -250,10 +280,14 @@ pub struct QueryBuilder<'a, T, DB: Database> {
     filters: Vec<FilterExpr>,
     limit: Option<i32>,
     offset: Option<i32>,
-    includes: Vec<String>,
+    includes: SmallVec<[String; 2]>,
     include_deleted: bool,
     allow_unsafe: bool,
     has_raw_filter: bool,
+    fast_path: bool,
+    unsafe_fast: bool,
+    ultra_fast: bool,
+    prepared: bool,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -266,13 +300,17 @@ impl<'a, T, DB: Database> std::fmt::Debug for QueryBuilder<'a, T, DB> {
             .field("includes", &self.includes)
             .field("include_deleted", &self.include_deleted)
             .field("allow_unsafe", &self.allow_unsafe)
+            .field("fast_path", &self.fast_path)
+            .field("unsafe_fast", &self.unsafe_fast)
+            .field("ultra_fast", &self.ultra_fast)
+            .field("prepared", &self.prepared)
             .finish()
     }
 }
 
 impl<'a, T, DB> QueryBuilder<'a, T, DB>
 where
-    DB: SqlDialect,
+    DB: SqlDialect + sqlx::database::HasStatementCache,
     T: Model<DB>,
 {
     /// Creates a new `QueryBuilder` using the provided [`Executor`].
@@ -282,10 +320,14 @@ where
             filters: Vec::with_capacity(4), // Pre-allocate for typical queries (1-4 filters)
             limit: None,
             offset: None,
-            includes: Vec::with_capacity(2), // Pre-allocate for typical queries (1-2 includes)
+            includes: SmallVec::with_capacity(2), // Pre-allocate for typical queries (1-2 includes)
             include_deleted: false,
             allow_unsafe: false,
             has_raw_filter: false,
+            fast_path: false,
+            unsafe_fast: false,
+            ultra_fast: false,
+            prepared: true,
             _marker: std::marker::PhantomData,
         }
     }
@@ -414,59 +456,74 @@ where
 
     fn format_filters_for_log(&self) -> String {
         let sensitive_fields = T::sensitive_fields();
-        let mut clauses = Vec::with_capacity(self.filters.len() + 1);
+        let mut rendered = String::with_capacity(128);
+        let mut first_clause = true;
+        let mut append_and = |buf: &mut String| {
+            if first_clause {
+                first_clause = false;
+            } else {
+                buf.push_str(" AND ");
+            }
+        };
+        use std::fmt::Write;
 
         for filter in &self.filters {
             match filter {
                 FilterExpr::Raw(_) => {
-                    clauses.push("RAW(<redacted>)".to_string());
+                    append_and(&mut rendered);
+                    rendered.push_str("RAW(<redacted>)");
                 }
                 FilterExpr::Compare { column, op, values } => {
                     let column_name = column.as_str();
-                    let is_sensitive = sensitive_fields.iter().any(|&f| f == column_name);
+                    let is_sensitive = sensitive_fields.contains(&column_name);
                     if op.is_in() {
                         if values.is_empty() {
-                            clauses.push("1=0".to_string());
+                            append_and(&mut rendered);
+                            rendered.push_str("1=0");
                             continue;
                         }
-                        let rendered = values
-                            .iter()
-                            .map(|value| {
-                                if is_sensitive {
-                                    "***".to_string()
-                                } else {
-                                    value.to_log_string()
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        clauses.push(format!("{} IN ({})", column_name, rendered));
+                        append_and(&mut rendered);
+                        let _ = write!(rendered, "{} IN (", column_name);
+                        for (idx, value) in values.iter().enumerate() {
+                            if idx > 0 {
+                                rendered.push_str(", ");
+                            }
+                            if is_sensitive {
+                                rendered.push_str("***");
+                            } else {
+                                rendered.push_str(&value.to_log_string());
+                            }
+                        }
+                        rendered.push(')');
                     } else {
-                        let rendered = if is_sensitive {
-                            "***".to_string()
+                        append_and(&mut rendered);
+                        let _ = write!(rendered, "{} {} ", column_name, op.as_str());
+                        if is_sensitive {
+                            rendered.push_str("***");
                         } else if let Some(value) = values.first() {
-                            value.to_log_string()
+                            rendered.push_str(&value.to_log_string());
                         } else {
-                            "NULL".to_string()
-                        };
-                        clauses.push(format!("{} {} {}", column_name, op.as_str(), rendered));
+                            rendered.push_str("NULL");
+                        }
                     }
                 }
                 FilterExpr::NullCheck { column, is_null } => {
+                    append_and(&mut rendered);
                     if *is_null {
-                        clauses.push(format!("{} IS NULL", column.as_str()));
+                        let _ = write!(rendered, "{} IS NULL", column.as_str());
                     } else {
-                        clauses.push(format!("{} IS NOT NULL", column.as_str()));
+                        let _ = write!(rendered, "{} IS NOT NULL", column.as_str());
                     }
                 }
             }
         }
 
         if T::has_soft_delete() && !self.include_deleted {
-            clauses.push("deleted_at IS NULL".to_string());
+            append_and(&mut rendered);
+            rendered.push_str("deleted_at IS NULL");
         }
 
-        clauses.join(" AND ")
+        rendered
     }
 
     fn estimate_bind_count(&self) -> usize {
@@ -513,6 +570,42 @@ where
     /// Enables execution of queries with raw SQL filters.
     pub fn allow_unsafe(mut self) -> Self {
         self.allow_unsafe = true;
+        self
+    }
+
+    /// Enables a fast path that skips logging and metrics for hot queries.
+    pub fn fast(mut self) -> Self {
+        self.fast_path = true;
+        self
+    }
+
+    /// Enables an unsafe fast path that skips logging, metrics, and safety guards.
+    pub fn unsafe_fast(mut self) -> Self {
+        self.fast_path = true;
+        self.unsafe_fast = true;
+        self.allow_unsafe = true;
+        self
+    }
+
+    /// Enables the ultra-fast path: skips logging, metrics, safety guards, and eager loading.
+    /// Note: Any configured includes will be ignored.
+    pub fn ultra_fast(mut self) -> Self {
+        self.fast_path = true;
+        self.unsafe_fast = true;
+        self.allow_unsafe = true;
+        self.ultra_fast = true;
+        self
+    }
+
+    /// Enable prepared statement caching for this query (default: enabled).
+    pub fn prepared(mut self) -> Self {
+        self.prepared = true;
+        self
+    }
+
+    /// Disable prepared statement caching for this query.
+    pub fn unprepared(mut self) -> Self {
+        self.prepared = false;
         self
     }
 
@@ -626,15 +719,13 @@ where
                         }
                         append_and(sql);
                         let _ = write!(sql, "{} IN (", DB::quote_identifier(column.as_str()));
-                        for (i, v) in values.iter().enumerate() {
-                            if i > 0 {
-                                sql.push_str(", ");
-                            }
-                            sql.push_str(&DB::placeholder(idx));
-                            idx += 1;
+                        let placeholders = crate::cached_placeholders_from::<DB>(idx, values.len());
+                        sql.push_str(placeholders);
+                        sql.push(')');
+                        idx = idx.saturating_add(values.len());
+                        for v in values {
                             binds.push(v.clone());
                         }
-                        sql.push(')');
                     } else {
                         append_and(sql);
                         let _ = write!(
@@ -687,6 +778,9 @@ where
     chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     fn ensure_safe_filters(&self) -> Result<(), sqlx::Error> {
+        if self.unsafe_fast {
+            return Ok(());
+        }
         if self.has_raw_filter && !self.allow_unsafe {
             return Err(sqlx::Error::Protocol(
                 "Refusing raw filter without allow_unsafe".to_string(),
@@ -722,7 +816,7 @@ where
         }
 
         #[cfg(debug_assertions)]
-        if tracing::enabled!(tracing::Level::DEBUG) {
+        if !self.fast_path && tracing::enabled!(tracing::Level::DEBUG) {
             let filters = self.format_filters_for_log();
             tracing::debug!(
                 operation = "select",
@@ -735,19 +829,23 @@ where
         let start = Instant::now();
         let mut results: Vec<T> = match &mut self.executor {
             Executor::Pool(pool) => {
-                let query = where_binds
-                    .into_iter()
-                    .fold(sqlx::query_as::<DB, T>(&sql), bind_value_query_as);
+                let base = apply_persistent_query_as(sqlx::query_as::<DB, T>(&sql), self.prepared);
+                let query = where_binds.into_iter().fold(base, bind_value_query_as);
                 query.fetch_all(*pool).await?
             }
             Executor::Conn(conn) => {
-                let query = where_binds
-                    .into_iter()
-                    .fold(sqlx::query_as::<DB, T>(&sql), bind_value_query_as);
+                let base = apply_persistent_query_as(sqlx::query_as::<DB, T>(&sql), self.prepared);
+                let query = where_binds.into_iter().fold(base, bind_value_query_as);
                 query.fetch_all(&mut **conn).await?
             }
         };
-        record_query_metrics("select", T::table_name(), start.elapsed());
+        if !self.fast_path {
+            record_query_metrics("select", T::table_name(), start.elapsed());
+        }
+
+        if self.ultra_fast {
+            return Ok(results);
+        }
 
         for relation in self.includes {
             match &mut self.executor {
@@ -794,7 +892,7 @@ where
         }
 
         #[cfg(debug_assertions)]
-        if tracing::enabled!(tracing::Level::DEBUG) {
+        if !self.fast_path && tracing::enabled!(tracing::Level::DEBUG) {
             let filters = self.format_filters_for_log();
             tracing::debug!(
                 operation = "stream",
@@ -806,7 +904,7 @@ where
 
         let executor = self.executor;
         Ok(Box::pin(async_stream::try_stream! {
-            let mut query = sqlx::query_as::<DB, T>(&sql);
+            let mut query = apply_persistent_query_as(sqlx::query_as::<DB, T>(&sql), self.prepared);
             for bind in where_binds {
                 query = bind_value_query_as(query, bind);
             }
@@ -835,7 +933,7 @@ where
         chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     {
         self.ensure_safe_filters()?;
-        if self.filters.is_empty() && !self.allow_unsafe {
+        if self.filters.is_empty() && !self.allow_unsafe && !self.unsafe_fast {
             return Err(sqlx::Error::Protocol(
                 "Refusing bulk update without filters".to_string(),
             ));
@@ -864,7 +962,7 @@ where
             SmallVec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, obj.len() + 1);
 
-        if tracing::enabled!(tracing::Level::DEBUG) {
+        if !self.fast_path && tracing::enabled!(tracing::Level::DEBUG) {
             let filters = self.format_filters_for_log();
             tracing::debug!(
                 operation = "bulk_update",
@@ -873,7 +971,7 @@ where
                 "premix query"
             );
         }
-        let mut query = sqlx::query::<DB>(&sql);
+        let mut query = apply_persistent_query(sqlx::query::<DB>(&sql), self.prepared);
         for val in obj.values() {
             match val {
                 serde_json::Value::String(s) => query = query.bind(s.clone()),
@@ -908,7 +1006,9 @@ where
                 Ok(DB::rows_affected(&res))
             }
         };
-        record_query_metrics("bulk_update", T::table_name(), start.elapsed());
+        if !self.fast_path {
+            record_query_metrics("bulk_update", T::table_name(), start.elapsed());
+        }
         result
     }
 
@@ -928,7 +1028,7 @@ where
     #[tracing::instrument(skip(self), fields(table = T::table_name()))]
     pub async fn delete(mut self) -> Result<u64, sqlx::Error> {
         self.ensure_safe_filters()?;
-        if self.filters.is_empty() && !self.allow_unsafe {
+        if self.filters.is_empty() && !self.allow_unsafe && !self.unsafe_fast {
             return Err(sqlx::Error::Protocol(
                 "Refusing bulk delete without filters".to_string(),
             ));
@@ -953,7 +1053,7 @@ where
             SmallVec::with_capacity(self.estimate_bind_count());
         self.render_where_clause_into(&mut sql, &mut where_binds, 1);
 
-        if tracing::enabled!(tracing::Level::DEBUG) {
+        if !self.fast_path && tracing::enabled!(tracing::Level::DEBUG) {
             let filters = self.format_filters_for_log();
             tracing::debug!(
                 operation = "bulk_delete",
@@ -965,21 +1065,21 @@ where
         let start = Instant::now();
         let result = match &mut self.executor {
             Executor::Pool(pool) => {
-                let query = where_binds
-                    .into_iter()
-                    .fold(sqlx::query::<DB>(&sql), bind_value_query);
+                let base = apply_persistent_query(sqlx::query::<DB>(&sql), self.prepared);
+                let query = where_binds.into_iter().fold(base, bind_value_query);
                 let res = query.execute(*pool).await?;
                 Ok(DB::rows_affected(&res))
             }
             Executor::Conn(conn) => {
-                let query = where_binds
-                    .into_iter()
-                    .fold(sqlx::query::<DB>(&sql), bind_value_query);
+                let base = apply_persistent_query(sqlx::query::<DB>(&sql), self.prepared);
+                let query = where_binds.into_iter().fold(base, bind_value_query);
                 let res = query.execute(&mut **conn).await?;
                 Ok(DB::rows_affected(&res))
             }
         };
-        record_query_metrics("bulk_delete", T::table_name(), start.elapsed());
+        if !self.fast_path {
+            record_query_metrics("bulk_delete", T::table_name(), start.elapsed());
+        }
         result
     }
 

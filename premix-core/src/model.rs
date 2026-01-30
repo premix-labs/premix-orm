@@ -39,6 +39,29 @@ pub enum UpdateResult {
     NotImplemented,
 }
 
+/// Wrapper for fast positional row decoding.
+#[derive(Debug)]
+pub struct FastRow<DB, T>(T, std::marker::PhantomData<DB>);
+
+impl<DB, T> FastRow<DB, T> {
+    /// Extract the inner model.
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+}
+
+impl<'r, DB, T> FromRow<'r, DB::Row> for FastRow<DB, T>
+where
+    DB: Database + SqlDialect,
+    T: Model<DB>,
+    usize: sqlx::ColumnIndex<DB::Row>,
+    for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
+{
+    fn from_row(row: &'r DB::Row) -> Result<Self, sqlx::Error> {
+        T::from_row_fast(row).map(|value| FastRow(value, std::marker::PhantomData))
+    }
+}
+
 // Chapter 10: Validation
 /// An error that occurred during model validation.
 #[derive(Debug, Clone)]
@@ -81,6 +104,29 @@ where
     where
         E: IntoExecutor<'a, DB = DB>;
 
+    /// Saves the current instance without hooks or extra safety checks.
+    fn save_fast<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        self.save(executor)
+    }
+
+    /// Saves the current instance using the ultra-fast path (no hooks/extra checks).
+    /// Note: On Postgres this may skip RETURNING and leave `id` unchanged.
+    fn save_ultra<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        self.save_fast(executor)
+    }
+
     /// Updates the current instance in the database using optimistic locking if a `version` field exists.
     fn update<'a, E>(
         &'a mut self,
@@ -88,6 +134,28 @@ where
     ) -> impl Future<Output = Result<UpdateResult, sqlx::Error>> + Send
     where
         E: IntoExecutor<'a, DB = DB>;
+
+    /// Updates the current instance without hooks or extra safety checks.
+    fn update_fast<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = Result<UpdateResult, sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        self.update(executor)
+    }
+
+    /// Updates the current instance using the ultra-fast path (no hooks/extra checks).
+    fn update_ultra<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = Result<UpdateResult, sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        self.update_fast(executor)
+    }
 
     // Chapter 16: Soft Delete support
     /// Deletes the current instance from the database (either hard or soft delete).
@@ -97,6 +165,28 @@ where
     ) -> impl Future<Output = Result<(), sqlx::Error>> + Send
     where
         E: IntoExecutor<'a, DB = DB>;
+
+    /// Deletes the current instance without hooks or extra safety checks.
+    fn delete_fast<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        self.delete(executor)
+    }
+
+    /// Deletes the current instance using the ultra-fast path (no hooks/extra checks).
+    fn delete_ultra<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        self.delete_fast(executor)
+    }
     /// Returns whether this model supports soft deletes (via a `deleted_at` field).
     fn has_soft_delete() -> bool;
     /// Returns a list of fields that are considered sensitive and should be redacted in logs.
@@ -112,11 +202,33 @@ where
     where
         E: IntoExecutor<'a, DB = DB>;
 
+    /// Fast row mapping using positional indices (override in derives for speed).
+    fn from_row_fast(row: &DB::Row) -> Result<Self, sqlx::Error>
+    where
+        usize: sqlx::ColumnIndex<DB::Row>,
+        for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
+        for<'r> Self: FromRow<'r, DB::Row>,
+    {
+        <Self as sqlx::FromRow<'_, DB::Row>>::from_row(row)
+    }
+
     /// Use raw SQL and map rows into the current model type.
     fn raw_sql<'q>(
         sql: &'q str,
     ) -> sqlx::query::QueryAs<'q, DB, Self, <DB as Database>::Arguments<'q>> {
         sqlx::query_as::<DB, Self>(sql)
+    }
+
+    /// Use raw SQL with fast positional mapping (select columns in model field order).
+    fn raw_sql_fast<'q>(
+        sql: &'q str,
+    ) -> sqlx::query::QueryAs<'q, DB, crate::FastRow<DB, Self>, <DB as Database>::Arguments<'q>>
+    where
+        Self: Sized,
+        usize: sqlx::ColumnIndex<DB::Row>,
+        for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
+    {
+        sqlx::query_as::<DB, crate::FastRow<DB, Self>>(sql)
     }
 
     /// Loads related models for a list of instances.

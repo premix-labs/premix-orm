@@ -54,6 +54,7 @@ pub struct StaticAssignment {
 #[derive(Clone, Copy, PartialEq)]
 pub enum QueryOperation {
     Select,
+    Find,
     Insert,
     Update,
     Delete,
@@ -67,6 +68,7 @@ pub struct StaticQueryInput {
     pub assignments: Vec<StaticAssignment>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub returning_all: bool,
 }
 
 impl Parse for StaticQueryInput {
@@ -79,6 +81,7 @@ impl Parse for StaticQueryInput {
         let op_ident: Ident = input.parse()?;
         let operation = match op_ident.to_string().to_uppercase().as_str() {
             "SELECT" => QueryOperation::Select,
+            "FIND" => QueryOperation::Find,
             "INSERT" => QueryOperation::Insert,
             "UPDATE" => QueryOperation::Update,
             "DELETE" => QueryOperation::Delete,
@@ -86,7 +89,7 @@ impl Parse for StaticQueryInput {
                 return Err(syn::Error::new(
                     op_ident.span(),
                     format!(
-                        "Unknown operation: {}. Supported: SELECT, INSERT, UPDATE, DELETE",
+                        "Unknown operation: {}. Supported: SELECT, FIND, INSERT, UPDATE, DELETE",
                         op_ident
                     ),
                 ));
@@ -97,6 +100,7 @@ impl Parse for StaticQueryInput {
         let mut assignments = Vec::new();
         let mut limit = None;
         let mut offset = None;
+        let mut returning_all = false;
 
         // Parse remaining arguments (filters, set, limit, offset)
         while !input.is_empty() {
@@ -166,6 +170,15 @@ impl Parse for StaticQueryInput {
                     let lit: LitInt = content.parse()?;
                     offset = Some(lit.base10_parse()?);
                 }
+                "returning_all" => {
+                    if !content.is_empty() {
+                        return Err(syn::Error::new(
+                            ident.span(),
+                            "returning_all() does not accept arguments",
+                        ));
+                    }
+                    returning_all = true;
+                }
                 _ => {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -182,24 +195,37 @@ impl Parse for StaticQueryInput {
             assignments,
             limit,
             offset,
+            returning_all,
         })
     }
 }
 
 /// Generate the compile-time query code
 pub fn generate_static_query(input: StaticQueryInput) -> TokenStream {
-    let model = &input.model;
+    let model = input.model.clone();
     let table_name = format!("{}s", model.to_string().to_lowercase());
 
     match input.operation {
-        QueryOperation::Select => generate_select_query(model, &table_name, &input),
-        QueryOperation::Insert => generate_insert_query(model, &table_name, &input),
-        QueryOperation::Update => generate_update_query(model, &table_name, &input),
-        QueryOperation::Delete => generate_delete_query(model, &table_name, &input),
+        QueryOperation::Select => generate_select_query(&model, &table_name, &input, false),
+        QueryOperation::Find => {
+            let mut find_input = input;
+            if find_input.limit.is_none() {
+                find_input.limit = Some(1);
+            }
+            generate_select_query(&model, &table_name, &find_input, true)
+        }
+        QueryOperation::Insert => generate_insert_query(&model, &table_name, &input),
+        QueryOperation::Update => generate_update_query(&model, &table_name, &input),
+        QueryOperation::Delete => generate_delete_query(&model, &table_name, &input),
     }
 }
 
-fn generate_select_query(model: &Ident, table_name: &str, input: &StaticQueryInput) -> TokenStream {
+fn generate_select_query(
+    model: &Ident,
+    table_name: &str,
+    input: &StaticQueryInput,
+    force_limit_one: bool,
+) -> TokenStream {
     // Build SQL string at compile time
     let mut sql = format!("SELECT * FROM {}", table_name);
 
@@ -227,6 +253,8 @@ fn generate_select_query(model: &Ident, table_name: &str, input: &StaticQueryInp
     // Add LIMIT
     if let Some(limit_val) = input.limit {
         sql.push_str(&format!(" LIMIT {}", limit_val));
+    } else if force_limit_one {
+        sql.push_str(" LIMIT 1");
     }
 
     // Add OFFSET
@@ -245,6 +273,7 @@ fn generate_select_query(model: &Ident, table_name: &str, input: &StaticQueryInp
             // SQL generated at compile time - Zero Overhead!
             const __PREMIX_SQL: &str = #sql;
             ::premix_orm::sqlx::query_as::<_, #model>(__PREMIX_SQL)
+                .persistent(true)
                 #(#binds)*
         }
     }
@@ -278,6 +307,7 @@ fn generate_insert_query(model: &Ident, table_name: &str, input: &StaticQueryInp
         {
             const __PREMIX_SQL: &str = #sql;
             ::premix_orm::sqlx::query_as::<_, #model>(__PREMIX_SQL)
+                .persistent(true)
                 #(#binds)*
         }
     }
@@ -316,17 +346,31 @@ fn generate_update_query(model: &Ident, table_name: &str, input: &StaticQueryInp
         }
     }
 
-    sql.push_str(" RETURNING *");
+    if input.returning_all {
+        sql.push_str(" RETURNING *");
+    }
 
     let binds = bind_exprs.iter().map(|expr| {
         quote! { .bind(#expr) }
     });
 
-    quote! {
-        {
-            const __PREMIX_SQL: &str = #sql;
-            ::premix_orm::sqlx::query_as::<_, #model>(__PREMIX_SQL)
-                #(#binds)*
+    if input.returning_all {
+        quote! {
+            {
+                const __PREMIX_SQL: &str = #sql;
+                ::premix_orm::sqlx::query_as::<_, #model>(__PREMIX_SQL)
+                    .persistent(true)
+                    #(#binds)*
+            }
+        }
+    } else {
+        quote! {
+            {
+                const __PREMIX_SQL: &str = #sql;
+                ::premix_orm::sqlx::query(__PREMIX_SQL)
+                    .persistent(true)
+                    #(#binds)*
+            }
         }
     }
 }
@@ -352,19 +396,31 @@ fn generate_delete_query(model: &Ident, table_name: &str, input: &StaticQueryInp
         }
     }
 
-    // RETURNING * only supported in Postgres/SQLite 3.35+, we assume availability or non-returning execution?
-    // Current pattern in `query_as` implies we want to return the deleted row.
-    sql.push_str(" RETURNING *");
+    if input.returning_all {
+        sql.push_str(" RETURNING *");
+    }
 
     let binds = bind_exprs.iter().map(|expr| {
         quote! { .bind(#expr) }
     });
 
-    quote! {
-        {
-            const __PREMIX_SQL: &str = #sql;
-            ::premix_orm::sqlx::query_as::<_, #model>(__PREMIX_SQL)
-                #(#binds)*
+    if input.returning_all {
+        quote! {
+            {
+                const __PREMIX_SQL: &str = #sql;
+                ::premix_orm::sqlx::query_as::<_, #model>(__PREMIX_SQL)
+                    .persistent(true)
+                    #(#binds)*
+            }
+        }
+    } else {
+        quote! {
+            {
+                const __PREMIX_SQL: &str = #sql;
+                ::premix_orm::sqlx::query(__PREMIX_SQL)
+                    .persistent(true)
+                    #(#binds)*
+            }
         }
     }
 }

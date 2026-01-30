@@ -6,7 +6,7 @@ use sqlx::Database;
 ///
 /// Implementing this trait allows Premix to generate correct SQL syntax and handle
 /// database-specific behaviors like placeholder styles and identifier quoting.
-pub trait SqlDialect: Database + Sized + Send + Sync
+pub trait SqlDialect: Database + sqlx::database::HasStatementCache + Sized + Send + Sync
 where
     Self::Connection: Send,
 {

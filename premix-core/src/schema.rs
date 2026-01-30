@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(feature = "postgres")]
 use sqlx::PgPool;
+#[cfg(feature = "sqlite")]
 use sqlx::SqlitePool;
 
 /// Metadata about a database column.
@@ -250,6 +251,7 @@ pub fn format_schema_diff_summary(diff: &SchemaDiff) -> String {
 }
 
 /// Introspects the schema of a SQLite database.
+#[cfg(feature = "sqlite")]
 pub async fn introspect_sqlite_schema(pool: &SqlitePool) -> Result<Vec<SchemaTable>, sqlx::Error> {
     let table_names: Vec<String> = sqlx::query_scalar(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '_premix_migrations' ORDER BY name",
@@ -362,6 +364,7 @@ pub async fn introspect_postgres_schema(pool: &PgPool) -> Result<Vec<SchemaTable
 }
 
 /// Compares the actual SQLite schema with an expected list of tables.
+#[cfg(feature = "sqlite")]
 pub async fn diff_sqlite_schema(
     pool: &SqlitePool,
     expected: &[SchemaTable],
@@ -826,6 +829,7 @@ fn foreign_key_map(
     fks.iter().map(|f| (foreign_key_key(f), f)).collect()
 }
 
+#[cfg(feature = "sqlite")]
 async fn introspect_sqlite_indexes(
     pool: &SqlitePool,
     table: &str,
@@ -850,6 +854,7 @@ async fn introspect_sqlite_indexes(
     Ok(indexes)
 }
 
+#[cfg(feature = "sqlite")]
 async fn introspect_sqlite_foreign_keys(
     pool: &SqlitePool,
     table: &str,
@@ -971,6 +976,7 @@ async fn introspect_postgres_foreign_keys(
 mod tests {
     use super::*;
 
+    #[cfg(feature = "sqlite")]
     #[tokio::test]
     async fn sqlite_introspect_and_diff_empty() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -1013,6 +1019,7 @@ mod tests {
         assert!(diff.is_empty());
     }
 
+    #[cfg(feature = "sqlite")]
     #[tokio::test]
     async fn sqlite_diff_reports_missing_column() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -1062,6 +1069,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "sqlite")]
     #[tokio::test]
     async fn sqlite_diff_reports_missing_index() {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();

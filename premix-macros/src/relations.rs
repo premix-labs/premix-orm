@@ -46,7 +46,9 @@ fn generate_has_many(parent: &Ident, child: &Ident) -> TokenStream {
             let mut executor = executor.into_executor();
             let p = <DB as premix_orm::SqlDialect>::placeholder(1);
             let sql = format!("SELECT * FROM {} WHERE {} = {}", #child_table, #fk, p);
-            let query = premix_orm::sqlx::query_as::<DB, #child>(&sql).bind(self.id);
+            let query = premix_orm::sqlx::query_as::<DB, #child>(&sql)
+                .persistent(true)
+                .bind(self.id);
             executor.fetch_all(query).await
         }
     }
@@ -71,7 +73,9 @@ fn generate_belongs_to(child: &Ident, parent: &Ident) -> TokenStream {
             let mut executor = executor.into_executor();
             let p = <DB as premix_orm::SqlDialect>::placeholder(1);
             let sql = format!("SELECT * FROM {} WHERE id = {}", #parent_table, p);
-            let query = premix_orm::sqlx::query_as::<DB, #parent>(&sql).bind(self.#fk);
+            let query = premix_orm::sqlx::query_as::<DB, #parent>(&sql)
+                .persistent(true)
+                .bind(self.#fk);
             executor.fetch_optional(query).await
         }
     }
@@ -108,17 +112,19 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                 let mut grouped: Vec<(i32, Vec<#child_model>)> =
                                     Vec::with_capacity(models.len());
                                 let mut grouped_map: Option<::std::collections::HashMap<i32, Vec<#child_model>>> = None;
+                                let mut children_all: Vec<#child_model> = Vec::new();
 
                                 const CHUNK_SIZE: usize = 500;
                                 for chunk in ids.chunks(CHUNK_SIZE) {
-            let params = premix_orm::cached_placeholders::<DB>(chunk.len());
+                                    let params = premix_orm::cached_placeholders::<DB>(chunk.len());
                                     let sql = format!(
                                         "SELECT * FROM {} WHERE {} IN ({})",
                                         #child_table,
                                         #parent_fk_str,
                                         params
                                     );
-                                    let mut query = premix_orm::sqlx::query_as::<DB, #child_model>(&sql);
+                                    let mut query = premix_orm::sqlx::query_as::<DB, #child_model>(&sql)
+                                        .persistent(true);
                                     for id in chunk {
                                         query = query.bind(*id);
                                     }
@@ -131,14 +137,21 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                             map.entry(fk).or_insert_with(Vec::new).push(child);
                                         }
                                     } else {
-                                        for child in children {
-                                            let fk = child.#parent_fk_ident;
-                                            // Use binary search to find insertion point (grouped is kept sorted)
-                                            match grouped.binary_search_by_key(&fk, |item| item.0) {
-                                                Ok(pos) => grouped[pos].1.push(child),
-                                                Err(pos) => grouped.insert(pos, (fk, vec![child])),
+                                        children_all.extend(children);
+                                    }
+                                }
+
+                                if !use_hash_map {
+                                    children_all.sort_by_key(|child| child.#parent_fk_ident);
+                                    for child in children_all {
+                                        let fk = child.#parent_fk_ident;
+                                        if let Some(last) = grouped.last_mut() {
+                                            if last.0 == fk {
+                                                last.1.push(child);
+                                                continue;
                                             }
                                         }
+                                        grouped.push((fk, vec![child]));
                                     }
                                 }
 
@@ -185,16 +198,18 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                 let mut grouped: Vec<(i32, Option<#parent_model>)> =
                                     Vec::with_capacity(ids.len());
                                 let mut grouped_map: Option<::std::collections::HashMap<i32, Option<#parent_model>>> = None;
+                                let mut parents_all: Vec<#parent_model> = Vec::new();
 
                                 const CHUNK_SIZE: usize = 500;
                                 for chunk in ids.chunks(CHUNK_SIZE) {
-                                    let params = premix_orm::build_placeholders::<DB>(1, chunk.len());
+                                    let params = premix_orm::cached_placeholders::<DB>(chunk.len());
                                     let sql = format!(
                                         "SELECT * FROM {} WHERE id IN ({})",
                                         #parent_table,
                                         params
                                     );
-                                    let mut query = premix_orm::sqlx::query_as::<DB, #parent_model>(&sql);
+                                    let mut query = premix_orm::sqlx::query_as::<DB, #parent_model>(&sql)
+                                        .persistent(true);
                                     for id in chunk {
                                         query = query.bind(*id);
                                     }
@@ -206,13 +221,19 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                                             map.entry(parent.id).or_insert(Some(parent));
                                         }
                                     } else {
-                                        for parent in parents {
-                                            // Use binary search to find insertion point (grouped is kept sorted)
-                                            match grouped.binary_search_by_key(&parent.id, |item| item.0) {
-                                                Ok(_) => {} // Skip duplicates (shouldn't happen with id)
-                                                Err(pos) => grouped.insert(pos, (parent.id, Some(parent))),
+                                        parents_all.extend(parents);
+                                    }
+                                }
+
+                                if !use_hash_map {
+                                    parents_all.sort_by_key(|parent| parent.id);
+                                    for parent in parents_all {
+                                        if let Some(last) = grouped.last() {
+                                            if last.0 == parent.id {
+                                                continue;
                                             }
                                         }
+                                        grouped.push((parent.id, Some(parent)));
                                     }
                                 }
 

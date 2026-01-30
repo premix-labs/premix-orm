@@ -39,7 +39,7 @@ pub use migrator::{Migration, Migrator};
 pub mod metrics;
 /// Core traits and types for database models.
 pub mod model;
-pub use model::{Model, ModelHooks, ModelValidation, UpdateResult, ValidationError};
+pub use model::{FastRow, Model, ModelHooks, ModelValidation, UpdateResult, ValidationError};
 /// Type-safe SQL query builder.
 pub mod query;
 pub use query::QueryBuilder;
@@ -48,7 +48,7 @@ pub mod schema;
 pub use schema::ModelSchema;
 /// Cache helpers for SQL snippets/placeholders.
 pub mod sql_cache;
-pub use sql_cache::cached_placeholders;
+pub use sql_cache::{cached_placeholders, cached_placeholders_from};
 
 /// Main entry point for the Premix ORM helpers.
 #[derive(Debug, Clone, Copy, Default)]
@@ -63,7 +63,8 @@ impl Premix {
         let options = SqliteConnectOptions::from_str(url)?
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Wal)
-            .synchronous(SqliteSynchronous::Normal);
+            .synchronous(SqliteSynchronous::Normal)
+            .statement_cache_capacity(200);
         sqlx::SqlitePool::connect_with(options).await
     }
 
@@ -101,8 +102,10 @@ pub mod prelude {
     pub use crate::dialect::SqlDialect;
     pub use crate::executor::{Executor, IntoExecutor};
     pub use crate::migrator::{Migration, Migrator};
-    pub use crate::model::{Model, ModelHooks, ModelValidation, UpdateResult, ValidationError};
+    pub use crate::model::{
+        FastRow, Model, ModelHooks, ModelValidation, UpdateResult, ValidationError,
+    };
     pub use crate::query::QueryBuilder;
     pub use crate::schema::ModelSchema;
-    pub use crate::sql_cache::cached_placeholders;
+    pub use crate::sql_cache::{cached_placeholders, cached_placeholders_from};
 }
