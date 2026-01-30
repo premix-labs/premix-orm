@@ -13,4 +13,6 @@
 - [Migrations](migrations.md)
 - [Multi-Database](multi-db.md)
 - [Production Checklist](production-checklist.md)
+- [Glass Box](glass-box.md)
+- [Performance Tuning](performance-tuning.md)
 - [Limitations](limitations.md)

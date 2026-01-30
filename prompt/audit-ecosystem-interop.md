@@ -2,40 +2,41 @@
 
 Role: Rust Ecosystem Integrator & Library Maintainer.
 
-Objective: Ensure Premix ORM integrates seamlessly with the standard Rust cloud native stack (Tokio, Serde, Tracing, Chrono/Time, Uuid).
+Objective: Validate seamless integration with common Rust ecosystem crates and runtimes.
 
-Instructions for Agent:
+Scope:
+- Serde integration
+- Tracing/logging
+- UUID/time/JSON types
+- Runtime compatibility
 
-1. 📦 Serialization Compatibility (Serde)
-   Audit the `#[derive(Model)]` macro interaction with `serde`.
+Input Matrix (must check all):
+- premix-core/src/model.rs
+- premix-core/src/query.rs
+- docs/ (interop sections)
 
-   Scenarios:
-   - Can a Model be returned directly as JSON from an Axum handler? (`impl Serialize`)
-   - Can a Model be deserialized from a request body? (`impl Deserialize`)
-   - Field Renaming: Does `#[premix(rename = "foo")]` conflict with `#[serde(rename = "bar")]`?
-   - Goal: Users should not have to create a separate DTO (Data Transfer Object) for simple CRUD.
+Expected Artifacts:
+- docs/audits/ECOSYSTEM_INTEROP_AUDIT.md
 
-2. 👁️ Observability & Logging (Tracing)
-   Audit the instrumentation of queries.
+Procedure:
+1) Serde compatibility: serialize/deserialize; attribute conflicts.
+2) Observability: tracing spans and redaction behavior.
+3) Common types: UUID, chrono/time, serde_json::Value mappings.
+4) Runtime neutrality: verify no hard tokio-only behavior unless documented.
 
-   Check:
-   - Do generated queries emit `tracing::info!` or `tracing::debug!` events?
-   - Privacy: Ensure values are not logged by default (only SQL templates), or adhere to the `#[premix(sensitive)]` flag.
-   - Correlation IDs: Can the logs be traced back to the parent request span?
-
-3. 🕰️ Common Type Interop
-   Verify strict type mapping for ecosystem standards.
-   - UUID: Does it support `uuid::Uuid` crate natively?
-   - Time: Does it support `chrono` or `time` crates?
-   - JSON: Does it map database JSON types to `serde_json::Value` automatically?
-
-4. 🚀 Async Runtime Agnosticism
-   Check for hidden runtime dependencies.
-   - Does the library accidentally depend on `tokio::spawn`?
-   - Compatibility: Can it run on `async-std` if the user chooses? (Or explicitly state Tokio-only dependency).
+Severity Rubric:
+- Critical: interop blocked for common types or runtime.
+- High: missing tracing or privacy leak.
+- Medium: manual conversion burden.
+- Low: minor doc gaps.
 
 Reporting Format:
+- Friction Points (manual conversions)
+- Logging Gaps (missing spans)
+- Serde Conflicts (attribute collisions)
 
-- Friction Points: Where the user has to manually convert types (e.g., String -> Uuid).
-- Logging Gaps: Critical operations (connections, heavy queries) that are silent in logs.
-- Serde Conflicts: Issues where macro attributes clash.
+Definition of Done:
+- At least 3 interop scenarios validated.
+
+Stop Conditions:
+- Required features not enabled; report and stop.

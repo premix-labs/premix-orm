@@ -2,63 +2,54 @@
 
 Role: Senior Developer Advocate & Documentation Strategist.
 
-Objective: Audit the mdBook, README, and examples to maximize developer adoption. Ensure the documentation builds trust for Senior Engineers while remaining accessible for Juniors.
+Objective: Audit docs for copy-paste success and trust-building clarity.
 
-Instructions for Agent:
+Scope:
+- README.md
+- orm-book
+- examples/
 
-1. ⏱️ Time-to-Hello-World (The 5-Minute Rule)
-   Setup Friction: Follow the "Getting Started" guide exactly as written on a fresh environment.
+Prerequisites / Tools:
+- rust toolchain
+- cargo test (doc tests)
 
-Check: Are there hidden dependencies (e.g., "Oh, you need clang installed first" or "Requires Nightly Rust") that aren't explicitly mentioned?
+Input Matrix (must check all):
+- README.md
+- orm-book/src/SUMMARY.md
+- orm-book/src/cli-usage.md
+- orm-book/src/limitations.md
+- examples/ (first runnable example)
 
-Copy-Pasteability: Try to copy the first example code block and run it.
+Expected Artifacts:
+- docs/audits/ONBOARDING_AUDIT.md (or equivalent report)
 
-Pass: It compiles and runs immediately.
+Run Order:
+1) Follow README Getting Started
+2) Build/run first example
+3) Scan docs for macro transparency and limitations
 
-Fail: Use of undefined variables, missing imports (use), or pseudocode that looks like Rust but isn't valid.
+Procedure:
+1) Time-to-Hello-World: follow steps exactly as written.
+2) Copy-paste validity: compile the first example verbatim.
+3) Macro transparency: explain derive output and SQL generation.
+4) Real-world scenarios: transactions, joins, CI/CD migrations.
+5) Skeptical senior checks: limitations and performance tuning sections.
 
-2. 🧠 Concept Clarity & "The Magic"
-   Demystifying Macros: Does the doc explain what #[derive(Model)] actually generates?
-
-Requirement: Senior devs hate "Black Magic." The docs must link to sections explaining the generated SQL or traits (The "Glass Box" philosophy).
-
-Architecture Diagrams: Are there visual aids explaining the flow? (Rust Struct -> Macro Expansion -> SQLx -> Database).
-
-Comparison Guide: Is there a "Premix vs Diesel vs SeaORM" section? Does it honestly highlight trade-offs (e.g., compile times vs runtime performance)?
-
-3. 🧪 Code Quality in Documentation (Doc Tests)
-   Automated Verification: Check if the library uses standard Rust Doc Tests (/// comments with code blocks).
-
-Validity: Scan snippets for common documentation errors:
-
-Outdated API usage (examples using v0.1 logic in v0.2 docs).
-
-Missing await on async functions in examples.
-
-Unhandled Result types in examples (using .unwrap() everywhere is bad practice for docs).
-
-4. 🌍 Real-World Scenarios (Beyond CRUD)
-   The "Cookbook" Check: Look for patterns solving real problems, not just syntax reference.
-
-Transactions: How to handle rollbacks manually?
-
-Complex Queries: How to do a JOIN with a GROUP BY and HAVING clause?
-
-Deployment: Is there a guide for running Migrations in a Docker container or CI/CD pipeline?
-
-5. 🤨 The "Skeptical Senior" Persona
-   Simulate a Senior Architect evaluating the library:
-
-Look for the "Limitations" section. Does the author admit what the ORM cannot do yet? (Honesty builds trust).
-
-Check for "Performance Tuning" guides.
+Severity Rubric:
+- Critical: example does not compile or missing required dependency.
+- High: misleading or incorrect guidance.
+- Medium: missing important scenario.
+- Low: style or clarity issues.
 
 Reporting Format:
+- Friction Log (step-by-step)
+- Broken Snippets (file + heading)
+- Content Gaps (feature exists but undocumented)
+- Magic Warnings (areas lacking explanation)
 
-Friction Log: Step-by-step account of where you stumbled during the "Getting Started" process.
+Definition of Done:
+- At least 3 docs paths audited.
+- At least 5 concrete findings.
 
-Broken Snippets: List of code blocks in the docs that failed to compile.
-
-Content Gaps: List of critical features (e.g., Soft Deletes) that exist in the code but are missing from the docs.
-
-"Magic" Warnings: Areas where the docs say "It just works" without explaining how.
+Stop Conditions:
+- Environment cannot build examples or run docs; report and stop.

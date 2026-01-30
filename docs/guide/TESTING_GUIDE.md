@@ -9,6 +9,8 @@ We provide categorized PowerShell scripts in `scripts/` to standardize testing:
 | Command | Category | Description |
 |---------|----------|-------------|
 | `./scripts/test/test_quick.ps1` | Smoke Test | Fast build and run of `basic-app`. |
+| `./scripts/test/test_db.ps1` | Integration | Runs SQLite tests and optional Postgres/MySQL tests when `DATABASE_URL` is set. |
+| `./scripts/test/test_e2e.ps1` | E2E | Runs `basic-app` + `tracing-app` and optional tutorial app. |
 | `./scripts/test/test_examples.ps1` | Regression | Runs all example apps in sequence. |
 | `./scripts/bench/bench_orm.ps1` | Perf | SQLite benchmark against SeaORM/Rbatis. |
 | `./scripts/bench/bench_io.ps1` | Perf (I/O) | Heavy Postgres I/O benchmark. |
@@ -55,20 +57,17 @@ We provide categorized PowerShell scripts in `scripts/` to standardize testing:
 
 ## Test Utilities
 
-Use these helpers to simplify transactional tests and ephemeral databases:
+Use a direct transaction and rollback for isolation in integration tests:
 
 ```rust
 use premix_orm::prelude::*;
 
 # async fn example() -> Result<(), sqlx::Error> {
-let mock = MockDatabase::new_sqlite().await?;
-
-with_test_transaction(mock.pool(), |conn| {
-    Box::pin(async move {
-        // Use conn for test setup and assertions.
-        Ok(())
-    })
-}).await?;
+let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
+let mut conn = pool.acquire().await?;
+sqlx::query("BEGIN").execute(&mut *conn).await?;
+// Use conn for test setup and assertions.
+sqlx::query("ROLLBACK").execute(&mut *conn).await?;
 # Ok(())
 # }
 ```

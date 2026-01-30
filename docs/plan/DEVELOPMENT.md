@@ -1,4 +1,4 @@
-# Master Flowplan: Premix ORM (Ultimate Edition)
+﻿# Master Flowplan: Premix ORM (Ultimate Edition)
 
 ## Project Concept
 **Concept:** The "Holy Grail" of Rust ORMs.  
@@ -64,6 +64,8 @@
 - [x] CLI tool (`premix-cli`).
 - [x] Documentation and examples.
 - [x] Macro error handling.
+- [x] Glass Box documentation (macro expansion + SQL flow).
+- [x] Performance tuning guide (prepared statements, fast/static paths).
 - [x] Test Utilities (New):
   - [x] Transactional tests (auto-rollback after each test case).
   - [x] MockDatabase helper.
@@ -84,7 +86,7 @@
 - [x] Smart Configuration (New):
   - [x] Auto-tune pool settings based on environment detection.
 
-### Phase 6: The Versatility - 🔄 UPDATED
+### Phase 6: The Versatility - ✅ COMPLETED
 **Mission:** Remove limitations and ensure safety.
 - [x] Multi-database architecture (SQLite, Postgres, MySQL).
 - [x] Soft deletes.

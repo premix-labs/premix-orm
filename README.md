@@ -47,8 +47,8 @@ Why this is practical:
 - **Glass Box**: `to_sql()`/`to_update_sql()` let you inspect SQL before running it.
 - **Escape Hatch**: `Model::raw_sql()` gives full control for edge cases.
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the engineering flowplan and
-[docs/PHILOSOPHY_CHECKLIST.md](docs/PHILOSOPHY_CHECKLIST.md) for status details.
+See [docs/plan/DEVELOPMENT.md](docs/plan/DEVELOPMENT.md) for the engineering flowplan and
+[docs/plan/PHILOSOPHY_CHECKLIST.md](docs/plan/PHILOSOPHY_CHECKLIST.md) for status details.
 
 ## Why Premix?
 
@@ -67,20 +67,20 @@ We don't just say we're fast; we prove it.
 TL;DR: Premix is near raw `sqlx` for inserts/selects and dramatically faster
 than loop-based bulk updates in this benchmark suite.
 
-Highlights (Criterion medians from the latest run; see `docs/BENCHMARK_RESULTS.md`):
+Highlights (Criterion medians from the latest run; see `docs/bench/BENCHMARK_RESULTS.md`):
 
-- Insert (1 row): Premix **12.34 us** vs raw SQLx **11.74 us**
-- Select (1 row): Premix **11.16 us** vs raw SQLx **11.25 us** (~same)
-- Bulk Update (1,000 rows): Premix **55.40 us** vs loop **13.38 ms** (~241x faster)
-- Postgres SELECT: Premix **54.49 us** vs raw SQL **54.68 us**
+- Insert (1 row): Premix **57.345 us** vs raw SQLx **55.022 us**
+- Select (1 row): Premix **53.015 us** vs raw SQLx **53.32 us**
+- Bulk Update (1,000 rows): Premix **91.608 us** vs loop **67.645 ms** (~739x faster)
+- Postgres SELECT: Premix **78.659 us** vs raw SQL **71.325 us**
 
-Full results: [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md)
+Full results: [docs/bench/BENCHMARK_RESULTS.md](docs/bench/BENCHMARK_RESULTS.md)
 
 | Operation            | Premix       | SeaORM   | Rbatis   | SQLx (Raw)   |
 | -------------------- | ------------ | -------- | -------- | ------------ |
-| **Insert**           | 12.34 us     | 26.97 us | 14.99 us | **11.74 us** |
-| **Select**           | **11.16 us** | 19.83 us | 14.49 us | 11.25 us     |
-| **Bulk Update (1k)** | **55.40 us** | -        | -        | 13.38 ms\*   |
+| **Insert**           | 57.345 us    | 64.654 us | 29.894 us | **55.022 us** |
+| **Select**           | **53.015 us** | 59.163 us | 31.64 us  | 53.32 us      |
+| **Bulk Update (1k)** | **91.608 us** | -        | -        | 67.645 ms\*   |
 
 _> Compared to standard loop-based updates._
 
@@ -252,14 +252,15 @@ Prefer a template? Start from `examples/basic-app` and modify as needed.
 
 For a longer-form guide, see [orm-book/](orm-book/) in this repository. It covers
 models, queries, relations, migrations, transactions, and limitations. For a map
-of the project layout, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+of the project layout, see [docs/guide/PROJECT_STRUCTURE.md](docs/guide/PROJECT_STRUCTURE.md).
+For transparency details, see [orm-book/src/glass-box.md](orm-book/src/glass-box.md).
 
 ## Architecture (At a Glance)
 
 ![Premix ORM Architecture](assets/premix-orm-architecture.svg)
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md), and the development roadmap is in
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+[docs/plan/DEVELOPMENT.md](docs/plan/DEVELOPMENT.md).
 
 ## How Premix Differs (Flow)
 
@@ -274,7 +275,8 @@ Release notes live in [CHANGELOG.md](CHANGELOG.md), and the development roadmap 
 
 See [orm-book/models.md](orm-book/src/models.md) and
 [orm-book/queries.md](orm-book/src/queries.md) for the generated API surface and
-SQL inspection helpers.
+SQL inspection helpers. For macro expansion and SQL flow, see
+[orm-book/src/glass-box.md](orm-book/src/glass-box.md).
 
 ## Advanced Features
 
@@ -384,6 +386,98 @@ serde = { version = "1", features = ["derive"] }
 - Use `include()` for N+1 avoidance and prefer batched bulk updates when possible.
 - Inspect SQL with `to_sql()`/`to_update_sql()` and keep filters parameterized.
 - Tune pool sizes via `Premix::smart_*_pool_with_profile` in production.
+- Use `ColumnRef::static_str("col")` for hot filters to avoid allocating column names.
+- For extreme hot paths, consider `Model::raw_sql(...)` or `sqlx::query_as!` and map manually.
+- Prepared statements are enabled by default; use `.unprepared()` to disable per query.
+
+### Fast Path (Hot Queries)
+
+For hot paths, use the fast path APIs to reduce runtime overhead:
+
+```rust
+use serde_json::json;
+
+let users = User::find_in_pool(&pool)
+    .filter_eq("status", "active")
+    .fast() // skip query logging + metrics
+    .all()
+    .await?;
+
+User::find_in_pool(&pool)
+    .filter_eq("status", "inactive")
+    .unsafe_fast() // skip logging + metrics + safety guards
+    .update(json!({ "status": "active" }))
+    .await?;
+
+// Ultra-fast path (skips logging/metrics/guards AND eager loading)
+let users = User::find_in_pool(&pool)
+    .filter_eq("status", "active")
+    .ultra_fast()
+    .all()
+    .await?;
+
+// Ultra-fast writes (skips hooks/extra checks; may skip RETURNING on Postgres)
+let mut user = User { id: 1, name: "Alice".to_string() };
+user.save_ultra(&pool).await?;
+```
+
+### Static Query Path (Critical Operations)
+
+Use `premix_query!` for critical paths to avoid runtime SQL generation:
+
+```rust
+// Find by id (SELECT + LIMIT 1)
+let user = premix_query!(User, FIND, filter_eq("id", user_id))
+    .fetch_optional(&pool)
+    .await?;
+
+// Update by id
+premix_query!(
+    User,
+    UPDATE,
+    set("status", "active"),
+    filter_eq("id", user_id)
+)
+.execute(&pool)
+.await?;
+
+// Update by id and return the updated row
+let user = premix_query!(
+    User,
+    UPDATE,
+    set("status", "active"),
+    filter_eq("id", user_id),
+    returning_all()
+)
+.fetch_one(&pool)
+.await?;
+
+// Delete by id
+premix_query!(
+    User,
+    DELETE,
+    filter_eq("id", user_id)
+)
+.execute(&pool)
+.await?;
+```
+
+`premix_query!` bypasses runtime SQL building and is the recommended path for
+latency-sensitive code.
+
+### Mapping Hot Path (Positional Decode)
+
+If you need even lower mapping overhead, use `raw_sql_fast` and select columns
+in model field order:
+
+```rust
+use premix_orm::prelude::*;
+
+let rows = User::raw_sql_fast("SELECT id, name FROM users ORDER BY id")
+    .fetch_all(&pool)
+    .await?;
+let users: Vec<User> = rows.into_iter().map(|row| row.into_inner()).collect();
+```
 
 ## Deployment and CI
 
@@ -409,6 +503,11 @@ serde = { version = "1", features = ["derive"] }
 
 See [orm-book/limitations.md](orm-book/src/limitations.md) for current gaps
 and known constraints.
+
+## Performance Tuning (More)
+
+See [orm-book/src/performance-tuning.md](orm-book/src/performance-tuning.md) for
+advanced tuning tips and hot-path options.
 
 ## Example App
 

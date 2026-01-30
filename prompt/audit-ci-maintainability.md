@@ -2,33 +2,41 @@
 
 Role: DevOps Engineer & Open Source Maintainer.
 
-Objective: Establish a robust CI/CD pipeline and enforce code quality standards to ensure Premix ORM remains maintainable and releasable.
+Objective: Ensure CI coverage, quality gates, and release readiness are robust and reproducible.
 
-Instructions for Agent:
+Scope:
+- GitHub Actions matrix
+- Lint/format policy
+- SemVer and crate metadata
 
-1. 🏗️ CI Pipeline Matrix
-   Design the GitHub Actions workflow.
+Input Matrix (must check all):
+- .github/workflows/ (CI)
+- Cargo.toml (workspace + crates)
+- clippy.toml, rustfmt.toml
 
-   Matrices needed:
-   - OS: Ubuntu-latest, macOS-latest, Windows-latest.
-   - Databases: Service containers for Postgres, MySQL, SQLite (verify integration tests against real DBs).
-   - Rust Channels: Stable, Beta, Nightly.
-   - MSRV (Minimum Supported Rust Version): Test against the oldest version you claim to support.
+Expected Artifacts:
+- docs/audits/CI_AUDIT.md
 
-2. 🧹 Linter & Formatting Standards
-   Audit `clippy.toml` and `rustfmt.toml`.
-   - Pedantic Clippy: Should we enable `#[warn(clippy::pedantic)]`?
-   - Documentation: Enforce `#[deny(missing_docs)]` for all public APIs.
-   - Cargo.toml: Check for bloated features. Are dependencies optional (e.g., `features = ["postgres", "runtime-tokio"]`) to keep compile times low?
+Procedure:
+1) CI matrix: OS, Rust channels, MSRV, DB services.
+2) Quality gates: rustfmt, clippy, doc tests.
+3) Dependency hygiene: optional features and cargo-audit.
+4) Release readiness: cargo-semver-checks and metadata completeness.
 
-3. 📦 Release Engineering
-   Audit the public API surface (`pub` items).
-   - SemVer Check: Use `cargo-semver-checks` to ensure no accidental breaking changes between versions.
-   - Feature Flags: specific analysis of additive vs. subtractive features.
-   - Crates.io Readiness: Check metadata (license, repository, keywords, categories).
+Severity Rubric:
+- Critical: missing CI coverage for supported platforms.
+- High: missing quality gates or semver risk.
+- Medium: feature bloat or metadata gaps.
+- Low: minor config polish.
 
 Reporting Format:
+- CI Gaps
+- Feature Bloat
+- Dependency Risk
+- Release Blockers
 
-- CI Gaps: Missing test environments (e.g., forgot to test on Windows).
-- Feature Bloat: Default features that should be optional.
-- Dependency Risk: Dependencies that are unmaintained or have known vulnerabilities (cargo-audit).
+Definition of Done:
+- At least 3 CI gaps or explicit "none found" with evidence.
+
+Stop Conditions:
+- CI config missing; report and stop.

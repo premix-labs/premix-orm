@@ -30,7 +30,10 @@ Each example is a small, runnable app focused on one feature area.
 ## Documentation
 
 - `README.md`: Project overview and quick start.
-- `docs/`: Architecture, development flowplan, benchmarks, testing, philosophy.
+- `docs/guide/`: Architecture, project structure, testing guide.
+- `docs/plan/`: Development flowplan and philosophy checklist.
+- `docs/bench/`: Benchmark results.
+- `docs/audits/`: Audit reports.
 - `orm-book/`: mdBook long-form guide and compile-checked examples.
 - `DISCLAIMER.md`: Research/alpha status notice.
 - `RELEASE_CHECKLIST.md`: Release steps and sanity checks.

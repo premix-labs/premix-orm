@@ -1,16 +1,22 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.7-alpha] - 2026-01-21
+## [1.0.7-alpha] - 2026-01-30
 
 ### Added
 
 - **Zero-Overhead Macro:** Added `premix_query!` for compile-time SQL generation (0% overhead).
-- **CRUD Macros:** `premix_query!` supports `SELECT`, `INSERT`, `UPDATE`, `DELETE` with compile-time SQL.
+- **CRUD Macros:** `premix_query!` supports `SELECT`, `FIND`, `INSERT`, `UPDATE`, `DELETE` with compile-time SQL.
+- **Static Queries:** `premix_query!` now accepts `returning_all()` for UPDATE/DELETE when returning rows is required.
+- **Fast Path:** Added `.fast()`/`.unsafe_fast()` on `QueryBuilder` to bypass logging/metrics and (optionally) safety guards for hot paths.
+- **Ultra Fast Path:** Added `.ultra_fast()` on `QueryBuilder` plus `save_ultra`/`update_ultra`/`delete_ultra` to minimize overhead on critical paths.
+- **Mapping Hot Path:** Added `from_row_fast` + `raw_sql_fast` for positional decoding in critical paths.
+- **Prepared Statements:** Enabled per-query statement caching (`.persistent(true)`) and added `.prepared()`/`.unprepared()` on `QueryBuilder`. `smart_sqlite_pool` now sets a higher statement cache capacity.
+- **Adaptive Eager Loading:** Eager relations now choose between sorted vectors and hash maps based on relation size, reducing overhead for small graphs while scaling for large ones.
 - **Web Integrations:** Built-in helpers for **Axum** (`PremixState`) and **Actix-web** (`PremixData`) natively in `premix-orm`.
 - **Metrics:** Integrated Prometheus metrics recorder natively into `premix-core`.
 - **Benchmarks:** Updated benchmarks showing `premix_query!` matching raw `sqlx` latency exactly.
@@ -18,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scripts:** Added `scripts/bench/bench_compare.ps1` and `bench_direct.ps1` for convenient benchmark runs.
 - **Scripts:** Standardized all benchmark scripts (`bench_orm.ps1`, `bench_io.ps1`) to use CPU pinning and high priority for reproducible results.
 - **Build:** Upgraded project to **Rust Edition 2024** with resolver v3.
+- **Docs:** Added Glass Box and Performance Tuning chapters to the book.
 
 ### Fixed
 
@@ -27,19 +34,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Consolidation:** Merged `premix-axum`, `premix-actix`, and `premix-metrics` into the main crates via Feature Flags to simplify maintenance.
+- **Static Queries:** `premix_query!` UPDATE/DELETE now default to no `RETURNING` to avoid row decode overhead in hot paths.
 - **Zero-Overhead:** Refactored `#[derive(Model)]` to use compile-time `concat!` for SQL generation, eliminating heap allocations in the hot path.
 - **Performance:** Pre-allocated `String::with_capacity()` in `build_placeholders()` to avoid reallocations.
 - **Performance:** Pre-allocated `Vec::with_capacity(4)` for filters and `Vec::with_capacity(2)` for includes in `QueryBuilder`.
 - **Performance:** Added `#[inline]` hints on critical hot path functions (`bind_value_query_as`, `build_placeholders`).
 - **Performance:** Eager loading now uses sorted `Vec` with binary search instead of `HashMap` for better L1/L2 cache locality.
 - **Performance:** Wrapped debug tracing in `#[cfg(debug_assertions)]` to eliminate overhead in release builds.
+- **Performance:** Cached IN-clause placeholders by `(DB, start, count)` to reduce SQL string building in hot paths.
 - **Project Structure**: Major modularization of `premix-core` into `dialect`, `executor`, `model`, and `query` modules.
 - **Docs:** Updated all `Cargo.toml` files with detailed Thai comments for better clarity.
-- **Docs:** Added comprehensive `ZERO_OVERHEAD_AUDIT.md` report validating performance claims.
+- **Docs:** Added comprehensive `docs/audits/ZERO_OVERHEAD_AUDIT.md` report validating performance claims.
+- **Tests:** Expanded SQLite integration suite to cover filters, fast paths, streams, SQL helpers, and guards.
+- **Tests:** Added MySQL/Postgres integration coverage for filters, prepared/unprepared, raw filter guards, and streams.
+- **Tests:** Added schema diff/migration tests and migrator rollback coverage for SQLite.
+- **Tests:** Added metrics feature test for Prometheus recorder (feature-gated).
 
 ## [1.0.6-alpha] - 2026-01-20
 
-> Note: Versions 1.0.0–1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
+> Note: Versions 1.0.0-1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
 
 ### Added
 
@@ -89,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.5-alpha] - 2026-01-19
 
-> Note: Versions 1.0.0ƒ?"1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
+> Note: Versions 1.0.0-1.0.4 were published before we added the `-alpha` suffix, but they are still considered alpha.
 
 ### Added
 
@@ -119,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs:** Expanded README messaging (core philosophy summary, benchmarks highlights, badges/links, demo, pitfalls, compatibility).
 - **Docs:** Added mermaid diagrams to the book for migrations and relations flows.
 - **Assets:** Added product-first logo, banner, and architecture diagrams under `assets/`.
-- **Docs:** Added Thai developer guide (`docs/DEVELOPMENT_TH.md`).
+- **Docs:** Added Thai developer guide (`docs/plan/DEVELOPMENT_TH.md`).
 - **Tests:** Expanded unit/integration coverage for core and CLI paths.
 
 ### Changed
@@ -127,7 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI:** Coverage script now excludes the proc-macro entry file for stable reporting.
 - **Versioning:** Bumped crate versions and docs to 1.0.4.
 - **Docs:** Replaced Mermaid diagrams with SVG assets in the book and README.
-- **Docs:** Refined `docs/DEVELOPMENT.md` wording for the latest flowplan narrative.
+- **Docs:** Refined `docs/plan/DEVELOPMENT.md` wording for the latest flowplan narrative.
 
 ### Fixed
 
@@ -139,7 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **SQL Transparency:** Added `to_sql()`, `to_update_sql()`, and `to_delete_sql()` on the query builder for inspecting generated SQL.
 - **Raw SQL Escape Hatch:** Added `Model::raw_sql(...)` for mapping raw queries to models.
-- **Docs:** Added `docs/PHILOSOPHY_CHECKLIST.md` and updated Core Philosophy status in `docs/DEVELOPMENT.md`.
+- **Docs:** Added `docs/plan/PHILOSOPHY_CHECKLIST.md` and updated Core Philosophy status in `docs/plan/DEVELOPMENT.md`.
 
 ## [1.0.2] - 2026-01-18
 

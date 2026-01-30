@@ -4,16 +4,19 @@ Use this checklist before publishing a new version.
 
 ### Versioning and docs
 
-- [ ] Bump versions in `premix-core`, `premix-macros`, `premix-orm`, `premix-cli`.
-- [ ] Align internal dependency versions (`premix-orm`/`premix-cli` -> `premix-core`/`premix-macros`).
-- [ ] Update `CHANGELOG.md` with release notes and date.
-- [ ] Update README and book version strings (`README.md`, `premix-orm/README.md`, `orm-book/`).
+- [x] Bump versions in `premix-core`, `premix-macros`, `premix-orm`, `premix-cli`.
+- [x] Align internal dependency versions (`premix-orm`/`premix-cli` -> `premix-core`/`premix-macros`).
+- [x] Update `CHANGELOG.md` with release notes and date.
+- [x] Update README and book version strings (`README.md`, `premix-orm/README.md`, `orm-book/`).
 
 ### Quality checks
 
-- [ ] Format and lint: `scripts/dev/run_fmt.ps1`
-- [ ] Quick tests: `scripts/test/test_quick.ps1`
-- [ ] Build workspace: `cargo build`
+- [x] Format and lint: `scripts/dev/run_fmt.ps1`
+- [x] Quick tests: `scripts/test/test_quick.ps1`
+- [x] Build workspace: `cargo build`
+- [x] Unit/integration tests: `cargo test -p premix-core --tests`, `cargo test -p premix-orm --tests`, `cargo test -p premix-cli --tests`
+- [x] MySQL/Postgres integration tests (Docker + `DATABASE_URL`)
+- [x] Metrics tests: `cargo test -p premix-orm --test metrics_sqlite --features metrics`
 
 ### Publish flow
 

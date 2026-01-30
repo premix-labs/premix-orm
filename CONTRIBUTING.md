@@ -58,6 +58,6 @@ We have a suite of PowerShell scripts to make testing easy:
 
 ## 🐛 Reporting Bugs
 
-Please inspect the `docs/TESTING_GUIDE.md` for information on how to reproduce issues. Open an issue on GitHub with a minimal reproduction case.
+Please inspect the `docs/guide/TESTING_GUIDE.md` for information on how to reproduce issues. Open an issue on GitHub with a minimal reproduction case.
 
 Happy Coding! 🚀

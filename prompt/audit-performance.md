@@ -2,57 +2,71 @@
 
 Role: Senior Rust Performance Engineer & Systems Architect.
 
-Objective: Rigorously validate the "Zero-Overhead" claim of Premix ORM. Ensure that the abstraction layer introduces no measurable latency compared to raw sqlx and optimizes for modern CPU architectures (L1/L2 cache, branch prediction).
+Objective: Validate the "Zero-Overhead" claim with reproducible evidence and fair comparisons versus raw sqlx.
 
-Instructions for Agent:
+Scope:
+- Query builder hot path
+- Macro-expanded code
+- Eager loading data paths
+- Prepared statement behavior
 
-1. 🛠️ Tooling & Instrumentation
-   Ensure cargo-bloat and cargo-expand are available.
+Prerequisites / Tools:
+- cargo expand
+- cargo bloat
+- (optional) perf or sampling profiler
 
-If possible, simulate a profile-guided analysis by looking for std::alloc calls in the hot path.
+Input Matrix (must check all):
+- premix-core/src/query.rs
+- premix-core/src/relations.rs
+- premix-macros/src/lib.rs
+- premix-macros/src/relations.rs
+- benchmarks/benches/premix_vs_sqlx.rs
+- benchmarks/benches/orm_comparison.rs
 
-2. 🧠 Deep Performance Audit
-   Analyze the source and expanded code for:
+Expected Artifacts:
+- docs/audits/ZERO_OVERHEAD_AUDIT.md
+- docs/bench/BENCHMARK_RESULTS.md
+- benchmarks/results/summary.md
 
-Heap vs Stack (Zero-Allocation Path):
+Run Order (minimal commands):
+1) cargo expand -p premix-macros
+2) cargo bloat -p premix-orm
+3) scripts/bench/bench_orm.ps1
+4) scripts/bench/bench_io.ps1
+5) scripts/bench/summarize_results.ps1
 
-Check if the Query Builder uses String concatenation or Vec resizing inside loops.
+Bench Fairness Contract:
+- Same DB version and settings
+- Same pool size
+- Same prepared on/off policy
+- Same mapping strategy (raw/static/ORM) per scenario
+- Same query shape and dataset
 
-Optimization Goal: Encourage the use of fmt::Write into a pre-allocated buffer or StackString concepts. Identify any Box<dyn ...> or Arc that could be replaced with Static Dispatch or stack-based traits.
+Procedure:
+1) Tooling check: verify cargo-expand and cargo-bloat installed.
+2) Hot-path allocation scan: String/Vec growth in loops, Box/dyn/Arc in hot path.
+3) Macro expansion audit: compare generated code to ideal sqlx usage.
+4) Cache behavior: SQL cached per model/operation; prepared statements reused.
+5) Eager loading locality: data structure adapts between Vec/HashMap by size.
+6) Fairness verification: ensure contract is met.
 
-Monomorphization & Code Bloat:
-
-Use cargo bloat to see if Generic implementations for every Model lead to an explosion in binary size.
-
-Verification: Ensure that shared logic is moved to non-generic functions (thin wrappers) where appropriate to keep the Instruction Cache (I-Cache) clean.
-
-Cache Locality (O(1) Eager Loading):
-
-Examine the data structures used in .include(). Are you using HashMap with high collision potential?
-
-Optimization Goal: Evaluate if a "Flat Map" or sorted Vec (binary search) would be more cache-friendly for small relation sets. Ensure data is stored contiguously to minimize L1/L2 cache misses.
-
-Branch Prediction & Assembly Logic:
-
-Compare the generated code of a Premix query against a manually written sqlx query.
-
-Check: Are there extra match arms or if let checks that the compiler cannot optimize away? Look for "Indirect Calls" (vtable lookups) that break the CPU's branch predictor.
-
-3. ⚖️ The "Golden Ratio" Comparison
-   Perform a logic-to-logic comparison:
-
-Premix: User::find().filter(id.eq(1)).fetch_one()
-
-Raw: sqlx::query_as!(User, "SELECT \* FROM users WHERE id = ?", 1)
-
-Count the number of transformations between the user's call and the database driver's execution. Every extra move/copy is a penalty.
+Severity Rubric:
+- Critical: correctness issue or unfair benchmark invalidates claims.
+- High: measurable performance regression or major allocation in hot path.
+- Medium: avoidable overhead or code bloat.
+- Low: minor micro-optimizations or doc gaps.
 
 Reporting Format:
+- Allocation Hotspots (file:line, impact, fix)
+- Dispatch Analysis (static vs dynamic)
+- Cache Efficiency Score (brief justification)
+- Instruction Overhead Estimate (qualitative)
+- Benchmark Fairness Checklist (pass/fail items)
 
-Allocation Hotspots: List specific lines where heap allocation occurs in the query path.
+Definition of Done:
+- At least 5 concrete findings with file references.
+- At least 3 actionable optimizations.
+- Fairness checklist completed or explicitly blocked.
 
-Dispatch Analysis: Identify where Dynamic Dispatch is used and propose a Static Dispatch alternative.
-
-Cache Efficiency Score: Assessment of the Eager Loading data layout.
-
-Instruction Overhead: Estimated "extra" CPU instructions added by the ORM compared to raw SQL.
+Stop Conditions:
+- Missing tools, missing benches, or missing outputs. Report blockers and stop.
