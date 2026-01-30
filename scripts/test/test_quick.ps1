@@ -45,7 +45,7 @@ function Invoke-Pinned {
     
     $process.WaitForExit()
     
-    if ($process.ExitCode -ne 0) {
+    if ($null -ne $process.ExitCode -and $process.ExitCode -ne 0) {
         throw "$Command failed with exit code $($process.ExitCode)"
     }
 }
