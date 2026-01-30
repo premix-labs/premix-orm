@@ -85,3 +85,11 @@ orm-book/book/
 # ===================
 benchmarks/results/*
 !benchmarks/results/summary.csv
+bench_orm_r*_output.txt
+bench_orm_r*_errors.txt
+bench_io_r*_output.txt
+bench_io_r*_errors.txt
+bench_orm_output.txt
+bench_orm_errors.txt
+bench_io_output.txt
+bench_io_errors.txt

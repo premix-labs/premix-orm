@@ -28,7 +28,7 @@ function Parse-BenchFile {
         $trimmed = $line.Trim()
         if (-not $trimmed) { continue }
         if ($trimmed -match "time:") {
-            $prefix = $trimmed.Split("time:")[0].Trim()
+            $prefix = ($trimmed -split "time:", 2)[0].Trim()
             $label = if ($prefix -like "*/*") { $prefix } else { $lastLabel }
             if (-not $label) { continue }
             $match = [regex]::Match($trimmed, "\[\s*([0-9.]+)\s*([^\d]+)\s+([0-9.]+)\s*([^\d]+)\s+([0-9.]+)\s*([^\d]+)")

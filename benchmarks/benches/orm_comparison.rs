@@ -4,10 +4,12 @@ use std::{
 };
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use premix_core::{Executor, Model as PremixModel, Premix, UpdateResult};
 use premix_core::query::ColumnRef;
+use premix_core::{Executor, Model as PremixModel, Premix, UpdateResult};
 use premix_macros::Model;
+use premix_orm::premix_query;
 use rbatis::RBatis;
+use rbs::Value;
 use sea_orm::{Database, QuerySelect, Set, TransactionTrait, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePool;
@@ -49,12 +51,14 @@ struct UserSoft {
     deleted_at: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(sqlx::FromRow)]
 struct UserRaw {
     id: i32,
     name: String,
 }
 
+#[allow(dead_code)]
 #[derive(sqlx::FromRow)]
 struct UserPostRaw {
     user_id: i32,
@@ -224,7 +228,7 @@ fn benchmark_insert(c: &mut Criterion) {
                 name: "Test".to_string(),
                 posts: None,
             };
-            <UserPremix as PremixModel<sqlx::Sqlite>>::save(&mut user, &pool)
+            <UserPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut user, &pool)
                 .await
                 .unwrap();
         })
@@ -242,8 +246,8 @@ fn benchmark_insert(c: &mut Criterion) {
         })
     });
 
-    // 4. Rbatis
-    group.bench_function("rbatis", |b| {
+    // 4. Rbatis CRUD
+    group.bench_function("rbatis_crud", |b| {
         b.to_async(&rt).iter(|| async {
             let id = INSERT_COUNTER.fetch_add(1, Ordering::SeqCst);
             let user = UserRbatis {
@@ -251,6 +255,19 @@ fn benchmark_insert(c: &mut Criterion) {
                 name: "Test".to_string(),
             };
             UserRbatis::insert(&rb, &user).await.unwrap();
+        })
+    });
+
+    // 5. Rbatis Raw
+    group.bench_function("rbatis_raw", |b| {
+        b.to_async(&rt).iter(|| async {
+            let id = INSERT_COUNTER.fetch_add(1, Ordering::SeqCst);
+            rb.exec(
+                "INSERT INTO user_rbatis (id, name) VALUES (?, ?)",
+                vec![Value::I32(id), Value::String("Test".into())],
+            )
+            .await
+            .unwrap();
         })
     });
 
@@ -272,7 +289,7 @@ fn benchmark_select(c: &mut Criterion) {
             name: "Data".to_string(),
             posts: None,
         }
-        .save(&pool)
+        .save_ultra(&pool)
         .await;
         let user = user_sea::ActiveModel {
             id: Set(1),
@@ -302,7 +319,8 @@ fn benchmark_select(c: &mut Criterion) {
     // 2. Premix ORM
     group.bench_function("premix_orm", |b| {
         b.to_async(&rt).iter(|| async {
-            let _user = <UserPremix as PremixModel<sqlx::Sqlite>>::find_by_id(&pool, 1)
+            let _user: Option<UserPremix> = premix_query!(UserPremix, FIND, filter_eq("id", 1))
+                .fetch_optional(&pool)
                 .await
                 .unwrap();
         })
@@ -315,11 +333,24 @@ fn benchmark_select(c: &mut Criterion) {
         })
     });
 
-    // 4. Rbatis
-    group.bench_function("rbatis", |b| {
+    // 4. Rbatis CRUD
+    group.bench_function("rbatis_crud", |b| {
         b.to_async(&rt).iter(|| async {
             use rbs::value;
             let _users: Vec<UserRbatis> = UserRbatis::select_by_map(&rb, value! {"id": 1})
+                .await
+                .unwrap();
+        })
+    });
+
+    // 5. Rbatis Raw
+    group.bench_function("rbatis_raw", |b| {
+        b.to_async(&rt).iter(|| async {
+            let _users: Vec<UserRbatis> = rb
+                .query_decode(
+                    "SELECT id, name FROM user_rbatis WHERE id = ?",
+                    vec![Value::I32(1)],
+                )
                 .await
                 .unwrap();
         })
@@ -346,7 +377,7 @@ fn benchmark_bulk_select(c: &mut Criterion) {
                 name: format!("User {}", i),
                 posts: None,
             };
-            let _ = <UserPremix as PremixModel<sqlx::Sqlite>>::save(&mut u, &pool).await;
+            let _ = <UserPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut u, &pool).await;
 
             let user = user_sea::ActiveModel {
                 id: Set(i),
@@ -377,13 +408,12 @@ fn benchmark_bulk_select(c: &mut Criterion) {
     // 2. Premix ORM
     group.bench_function("premix_orm_manual_map", |b| {
         b.to_async(&rt).iter(|| async {
-            let rows = sqlx::query_as::<sqlx::sqlite::Sqlite, UserPremix>(
-                "SELECT * FROM userpremixs LIMIT 100",
-            )
-            .fetch_all(&pool)
-            .await
-            .unwrap();
-            assert_eq!(rows.len(), 100);
+            let rows = UserPremix::raw_sql_fast("SELECT id, name FROM userpremixs LIMIT 100")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            let users: Vec<UserPremix> = rows.into_iter().map(|row| row.into_inner()).collect();
+            assert_eq!(users.len(), 100);
         })
     });
 
@@ -431,7 +461,7 @@ fn benchmark_relation(c: &mut Criterion) {
             name: "Boss".to_string(),
             posts: None,
         };
-        <UserPremix as PremixModel<sqlx::Sqlite>>::save(&mut user, &pool)
+        <UserPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut user, &pool)
             .await
             .unwrap();
 
@@ -446,7 +476,7 @@ fn benchmark_relation(c: &mut Criterion) {
                 userpremix_id: 1,
                 title: format!("Post {}", i),
             };
-            <PostPremix as PremixModel<sqlx::Sqlite>>::save(&mut post, &pool)
+            <PostPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut post, &pool)
                 .await
                 .unwrap();
 
@@ -571,13 +601,13 @@ fn benchmark_bulk_relation(c: &mut Criterion) {
 
         for i in 1..=50 {
             let mut u = UserPremix { id: i, name: format!("User {}", i), posts: None };
-            <UserPremix as PremixModel<sqlx::Sqlite>>::save(&mut u, &pool).await.unwrap();
+            <UserPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut u, &pool).await.unwrap();
             sqlx::query("INSERT INTO user_raws (id, name) VALUES ($1, $2)").bind(i).bind(format!("User {}", i)).execute(&pool).await.unwrap();
 
             for j in 1..=10 {
                 let pid = (i * 1000) + j;
                 let mut p = PostPremix { id: pid, userpremix_id: i, title: format!("Post {}", pid) };
-                <PostPremix as PremixModel<sqlx::Sqlite>>::save(&mut p, &pool).await.unwrap();
+                <PostPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut p, &pool).await.unwrap();
                 sqlx::query("INSERT INTO post_raws (id, user_id, title) VALUES ($1, $2, $3)").bind(pid).bind(i).bind(format!("Post {}", pid)).execute(&pool).await.unwrap();
             }
 
@@ -713,15 +743,17 @@ fn benchmark_update_delete(c: &mut Criterion) {
                 name: "Original".to_string(),
                 posts: None,
             };
-            <UserPremix as PremixModel<sqlx::Sqlite>>::save(&mut u, &pool)
+            <UserPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut u, &pool)
                 .await
                 .unwrap();
 
             u.name = "Updated".to_string();
-            let result =
-                <UserPremix as PremixModel<sqlx::Sqlite>>::update(&mut u, Executor::Pool(&pool))
-                    .await
-                    .unwrap();
+            let result = <UserPremix as PremixModel<sqlx::Sqlite>>::update_ultra(
+                &mut u,
+                Executor::Pool(&pool),
+            )
+            .await
+            .unwrap();
             assert_eq!(result, UpdateResult::Success);
         })
     });
@@ -754,11 +786,11 @@ fn benchmark_update_delete(c: &mut Criterion) {
                 name: "To Delete".to_string(),
                 posts: None,
             };
-            <UserPremix as PremixModel<sqlx::Sqlite>>::save(&mut u, &pool)
+            <UserPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut u, &pool)
                 .await
                 .unwrap();
 
-            <UserPremix as PremixModel<sqlx::Sqlite>>::delete(&mut u, Executor::Pool(&pool))
+            <UserPremix as PremixModel<sqlx::Sqlite>>::delete_ultra(&mut u, Executor::Pool(&pool))
                 .await
                 .unwrap();
         })
@@ -785,8 +817,8 @@ fn benchmark_update_delete(c: &mut Criterion) {
         })
     });
 
-    // 6. Update Benchmark (Rbatis)
-    group.bench_function("update_rbatis", |b| {
+    // 6. Update Benchmark (Rbatis Raw)
+    group.bench_function("update_rbatis_raw", |b| {
         b.to_async(&rt).iter(|| async {
             let id = INSERT_COUNTER.fetch_add(1, Ordering::SeqCst);
             let u = UserRbatis {
@@ -797,7 +829,7 @@ fn benchmark_update_delete(c: &mut Criterion) {
 
             rb.exec(
                 "UPDATE user_rbatis SET name = ? WHERE id = ?",
-                vec![rbs::value!("Updated"), rbs::value!(id)],
+                vec![Value::String("Updated".into()), Value::I32(id)],
             )
             .await
             .unwrap();
@@ -821,8 +853,8 @@ fn benchmark_update_delete(c: &mut Criterion) {
         })
     });
 
-    // 8. Delete Benchmark (Rbatis)
-    group.bench_function("delete_rbatis", |b| {
+    // 8. Delete Benchmark (Rbatis Raw)
+    group.bench_function("delete_rbatis_raw", |b| {
         b.to_async(&rt).iter(|| async {
             let id = INSERT_COUNTER.fetch_add(1, Ordering::SeqCst);
             let u = UserRbatis {
@@ -831,12 +863,9 @@ fn benchmark_update_delete(c: &mut Criterion) {
             };
             UserRbatis::insert(&rb, &u).await.unwrap();
 
-            rb.exec(
-                "DELETE FROM user_rbatis WHERE id = ?",
-                vec![rbs::value!(id)],
-            )
-            .await
-            .unwrap();
+            rb.exec("DELETE FROM user_rbatis WHERE id = ?", vec![Value::I32(id)])
+                .await
+                .unwrap();
         })
     });
 
@@ -877,7 +906,7 @@ fn benchmark_transactions(c: &mut Criterion) {
                 posts: None,
             };
 
-            <UserPremix as PremixModel<sqlx::Sqlite>>::save(&mut u, &mut *tx)
+            <UserPremix as PremixModel<sqlx::Sqlite>>::save_ultra(&mut u, &mut *tx)
                 .await
                 .unwrap();
 
@@ -951,9 +980,12 @@ fn benchmark_bulk_ops(c: &mut Criterion) {
                 .unwrap();
             for mut user in users {
                 user.name = "Updated Loop".to_string();
-                <UserPremix as PremixModel<sqlx::Sqlite>>::update(&mut user, Executor::Pool(&pool))
-                    .await
-                    .unwrap();
+                <UserPremix as PremixModel<sqlx::Sqlite>>::update_ultra(
+                    &mut user,
+                    Executor::Pool(&pool),
+                )
+                .await
+                .unwrap();
             }
         })
     });
@@ -963,6 +995,7 @@ fn benchmark_bulk_ops(c: &mut Criterion) {
         b.to_async(&rt).iter(|| async {
             <UserPremix as PremixModel<sqlx::Sqlite>>::find_in_pool(&pool)
                 .filter_is_not_null(ColumnRef::static_str("id"))
+                .fast()
                 .update(serde_json::json!({ "name": "Updated Bulk" }))
                 .await
                 .unwrap();
@@ -1008,15 +1041,17 @@ fn benchmark_optimistic_locking(c: &mut Criterion) {
                 name: "Original".to_string(),
                 version: 1,
             };
-            <UserVersioned as PremixModel<sqlx::Sqlite>>::save(&mut u, &pool)
+            <UserVersioned as PremixModel<sqlx::Sqlite>>::save_ultra(&mut u, &pool)
                 .await
                 .unwrap();
 
             u.name = "Updated".to_string();
-            let result =
-                <UserVersioned as PremixModel<sqlx::Sqlite>>::update(&mut u, Executor::Pool(&pool))
-                    .await
-                    .unwrap();
+            let result = <UserVersioned as PremixModel<sqlx::Sqlite>>::update_ultra(
+                &mut u,
+                Executor::Pool(&pool),
+            )
+            .await
+            .unwrap();
             assert_eq!(result, UpdateResult::Success);
         })
     });
@@ -1065,12 +1100,12 @@ fn benchmark_soft_delete(c: &mut Criterion) {
                 name: "Alice".to_string(),
                 deleted_at: None,
             };
-            <UserSoft as PremixModel<sqlx::Sqlite>>::save(&mut u, &pool)
+            <UserSoft as PremixModel<sqlx::Sqlite>>::save_ultra(&mut u, &pool)
                 .await
                 .unwrap();
 
             // Soft Delete via .delete()
-            <UserSoft as PremixModel<sqlx::Sqlite>>::delete(&mut u, Executor::Pool(&pool))
+            <UserSoft as PremixModel<sqlx::Sqlite>>::delete_ultra(&mut u, Executor::Pool(&pool))
                 .await
                 .unwrap();
 

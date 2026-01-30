@@ -157,7 +157,7 @@ fn benchmark_io_insert(c: &mut Criterion) {
                 id,
                 name: format!("Premix User {}", id),
             };
-            <UserIO as PremixModel<sqlx::Postgres>>::save(&mut u, &pool)
+            <UserIO as PremixModel<sqlx::Postgres>>::save_ultra(&mut u, &pool)
                 .await
                 .unwrap();
         })
