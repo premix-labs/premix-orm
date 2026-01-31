@@ -1,10 +1,10 @@
-$ErrorActionPreference = "Stop"
-$sw = [Diagnostics.Stopwatch]::StartNew()
-
 param(
     [string]$PostgresUrl,
     [string]$MysqlUrl
 )
+
+$ErrorActionPreference = "Stop"
+$sw = [Diagnostics.Stopwatch]::StartNew()
 
 function Write-Header {
     param($Text)
@@ -26,7 +26,10 @@ function Write-Success {
 function Resolve-EnvUrl {
     param($Value, $EnvKey)
     if ($Value) { return $Value }
-    if ($env:$EnvKey) { return $env:$EnvKey }
+    if ($EnvKey) {
+        $envValue = [Environment]::GetEnvironmentVariable($EnvKey)
+        if ($envValue) { return $envValue }
+    }
     return ""
 }
 
