@@ -54,7 +54,7 @@ let users = User::find_in_pool(&pool)
 - `filter("...")`: Adds raw SQL to the `WHERE` clause (unsafe for user input; requires `.allow_unsafe()`).
 - `filter_raw("...")`: Explicit raw SQL filter (same as `filter`, requires `.allow_unsafe()`).
 - `limit(n)` / `offset(n)`: Pagination.
-- `include("relation")`: Eager-load relations (see Relations chapter).
+- `include("relation")` or `include(User::posts)`: Eager-load relations (see Relations chapter).
 - `with_deleted()`: Include soft-deleted rows.
 - `all()`: Execute and return `Vec<Model>`.
 - `update(json)`: Bulk update.

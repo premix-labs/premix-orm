@@ -18,7 +18,7 @@ Scope: README.md, orm-book, examples/
 - No explicit "how to run examples" guidance in README (path + cargo run commands).
 
 ## Magic Warnings
-- Schema diff/migrate requires custom binaries (premix-sync/premix-schema); the rationale and workflow are not explained in the main README.
+- CLI schema diff/sync now scans `src/` directly; README should mention the helper binaries are no longer required.
 - Migration down on SQLite can be destructive; warning is missing from orm-book CLI usage.
 
 Definition of Done: 5+ concrete findings listed.

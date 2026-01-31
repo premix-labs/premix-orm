@@ -16,16 +16,16 @@ cargo install premix-cli
 
 ## Features
 
-- Project initialization (scaffolds premix-sync / premix-schema)
+- Project initialization (no helper binaries required)
 - SQL-based migrations (create, up, down)
-- Experimental schema sync command
-- Schema diff/migration via `premix schema` (requires `premix-schema` bin)
+- Schema sync by scanning `src/` for `#[derive(Model)]`
+- Schema diff/migration via `premix schema` (SQLite/Postgres)
 
 ## Usage
 
 ### Initialize a Project
 
-Scaffolds `src/bin/premix-sync.rs` and `src/bin/premix-schema.rs` templates.
+Initializes the project and confirms CLI defaults.
 
 ```bash
 premix init
@@ -87,13 +87,13 @@ premix sync
 premix sync --dry-run
 ```
 
-The CLI looks for `src/bin/premix-sync.rs` and runs it. Use that binary to
-call `Premix::sync` for the models you want to create.
+The CLI scans `src/` for `#[derive(Model)]` and creates missing tables for
+those models. This removes the need to maintain helper binaries.
 
-_Note: For robustness, we still recommend calling `Premix::sync(&pool)` in your
-application code on startup._
+If SQLite is locked by background `rustc` processes on Windows, set
+`PREMIX_SIGNAL_RUSTC=1` to let the CLI send a termination signal before retrying.
 
-### Schema Diff (SQLite v1)
+### Schema Diff (SQLite/Postgres v1)
 
 Diff or generate migrations from local models (SQLite v1).
 
@@ -108,11 +108,8 @@ premix schema migrate --database sqlite:my_app.db --dry-run
 premix schema migrate --database sqlite:my_app.db --yes
 ```
 
-The CLI looks for `src/bin/premix-schema.rs` and runs it. That binary should
-use `premix_core::schema` to compare models to the live database and print SQL
-when running `migrate`.
-
-Recommended output includes a summary using
+The CLI scans `src/` for `#[derive(Model)]`, compares the expected schema to
+the live database, and prints a summary using
 `premix_core::schema::format_schema_diff_summary`.
 
 ## Compatibility

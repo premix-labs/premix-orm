@@ -87,7 +87,7 @@ struct Post {
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 let users = User::find_in_pool(&pool)
-    .include("posts")
+    .include(User::posts)
     .all()
     .await?;
 # Ok(())
@@ -96,6 +96,20 @@ let users = User::find_in_pool(&pool)
 
 Premix batches related rows using a `WHERE IN (...)` query and attaches the
 results to the `posts` field.
+
+To auto-include a relation on all queries, add the `eager` flag:
+
+```rust,no_run
+#[derive(Model)]
+struct User {
+    id: i32,
+    name: String,
+
+    #[has_many(Post, eager)]
+    #[premix(ignore)]
+    posts: Option<Vec<Post>>,
+}
+```
 
 ### Belongs To Eager Loading
 
@@ -126,7 +140,7 @@ Then call:
 ```rust,no_run
 # async fn example(pool: premix_orm::sqlx::SqlitePool) -> Result<(), sqlx::Error> {
 let posts = Post::find_in_pool(&pool)
-    .include("user")
+    .include(Post::user)
     .all()
     .await?;
 # Ok(())
@@ -180,7 +194,7 @@ struct Post {
 # Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
 # Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 let users = User::find_in_pool(&pool)
-    .include("posts")
+    .include(User::posts)
     .all()
     .await?;
 # Ok(())
@@ -191,7 +205,8 @@ let users = User::find_in_pool(&pool)
 
 - `belongs_to(User)` expects a `user_id` field on the child model.
 - Eager loading requires a `#[premix(ignore)]` field to store the relation.
-- The relation name passed to `include("...")` must match the field name.
+- The relation name passed to `include("...")` must match the field name (or use `include(User::posts)` for a typed relation).
+- If a `belongs_to` lazy method exists with the same name, the typed relation const uses a `_rel` suffix (e.g., `Post::user_rel`).
  - Eager `belongs_to` requires the parent model to be `Clone`.
 
 If you need complex joins or custom projections, use raw SQL and map results

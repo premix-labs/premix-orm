@@ -171,11 +171,16 @@ Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 
 ```rust
 let users = User::find_in_pool(&pool)
-    .include("posts")      // Eager load posts efficiently
+    .include(User::posts)   // Typed relation name to avoid typos
     .filter_gt("age", 18)    // Safe parameterized filter
     .limit(20)
     .all()
     .await?;
+
+// Sugar for common cases:
+let all_users = User::all(&pool).await?;
+let by_id = User::find_by_id(&pool, 1).await?;
+let updated = User::update_by_id(&pool, 1, serde_json::json!({ "name": "New" })).await?;
 ```
 
 ---
@@ -189,7 +194,7 @@ cd premix-demo
 
 ```toml
 [dependencies]
-premix-orm = { version = "1.0.8-alpha", features = ["postgres", "axum"] }
+premix-orm = { version = "1.0.9-alpha", features = ["postgres", "axum"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -234,7 +239,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Premix::sync::<premix_orm::sqlx::Sqlite, Post>(&pool).await?;
 
     let users = User::find_in_pool(&pool)
-        .include("posts")
+        .include(User::posts)
         .filter_gt("id", 0)
         .all()
         .await?;
@@ -391,7 +396,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = { version = "1.0.8-alpha", features = ["postgres", "axum"] }
+premix-orm = { version = "1.0.9-alpha", features = ["postgres", "axum"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
