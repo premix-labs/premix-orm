@@ -1,14 +1,24 @@
-# ONBOARDING AUDIT
+# Onboarding Audit
 
-Status: Partial (doc tests, mdBook build, and basic example run executed).
+Date: 2026-01-31
+Scope: README.md, orm-book, examples/
 
-Friction Log:
-- Doc tests ran successfully; one doc test is ignored by design.
-- mdBook build succeeded (`mdbook build orm-book`).
-- examples/basic-app ran successfully and printed expected output.
+## Friction Log (Time-to-Hello-World)
+1) Followed examples/basic-app (first runnable example). `cargo run` succeeded and printed expected output. (examples/basic-app)
+2) README Quick Start compiles, but does not explicitly call out save/update semantics or new CLI flags.
 
-Content Gaps:
-- Docs include limitations and performance tuning sections. Verify first example runs end-to-end with DB config.
+## Broken Snippets
+- orm-book/src/cli-usage.md: "premix init" described as placeholder, but CLI now scaffolds templates. Doc is out of date.
+- orm-book/src/cli-usage.md: schema example imports `premix_orm::schema_models`, but this macro is not re-exported in premix-orm; should use `premix_core::schema::schema_models` or re-export. (orm-book/src/cli-usage.md)
+- orm-book/src/cli-usage.md: schema example uses `premix_orm::schema` and `schema_models` without showing required feature flags; may fail on default features.
 
-Stop Conditions:
-- No full "Getting Started" walkthrough executed; no runtime example execution with DB.
+## Content Gaps
+- CLI flags `--dry-run`/`--yes` and .env auto-load are not documented in orm-book CLI usage.
+- Save/update semantics (save updates when id != 0) are not called out in Getting Started or CLI docs.
+- No explicit "how to run examples" guidance in README (path + cargo run commands).
+
+## Magic Warnings
+- Schema diff/migrate requires custom binaries (premix-sync/premix-schema); the rationale and workflow are not explained in the main README.
+- Migration down on SQLite can be destructive; warning is missing from orm-book CLI usage.
+
+Definition of Done: 5+ concrete findings listed.

@@ -1,17 +1,21 @@
-# ECOSYSTEM INTEROP AUDIT
+# Ecosystem Interop Audit
 
-Status: Partial (feature compile checks executed).
+Date: 2026-01-31
+Scope: premix-core/src/model.rs, premix-core/src/query.rs, docs/
 
-Findings:
-- `cargo check -p premix-core --features postgres` succeeded.
-- `cargo check -p premix-core --no-default-features --features mysql` succeeded with warnings about unused migrator items.
-- `examples/tracing-app` ran and produced structured logs with query spans and SQL statements.
-- Common types (uuid/chrono/json) appear supported in code; verify in docs and tests.
+## Friction Points (manual conversions)
+- `BindValue` supports String/i64/f64/bool/uuid/DateTime<Utc>, but not `NaiveDateTime`, `NaiveDate`, `serde_json::Value`, or arrays; users must convert types manually. (premix-core/src/query.rs)
+- Schema type mapping uses heuristics and may not align with custom database types; manual migrations required for advanced types. (orm-book/src/models.md)
+- `premix_orm::schema_models` macro is referenced in docs but not re-exported, creating interop friction for CLI examples. (orm-book/src/cli-usage.md)
 
-Gaps:
-- Runtime-agnostic guarantee not verified.
-- MySQL-only build emits dead_code warnings in migrator module.
- - Tracing output includes SQL statements; verify sensitive field masking in logs.
+## Logging Gaps
+- Query logging uses `tracing::debug` in save/update/select; fast/unsafe paths skip logs by design. This is acceptable but should be highlighted for observability. (premix-core/src/query.rs, premix-macros/src/lib.rs)
+- Sensitive filter values are redacted, but update payloads are not explicitly redacted in logs. (premix-core/src/query.rs)
 
-Stop Conditions:
-- Feature matrix not compiled; runtime compatibility not executed.
+## Serde Conflicts
+- No direct conflicts observed; `#[premix(ignore)]` can coexist with `#[serde(skip)]`, but guidance is not documented. (premix-core/src/model.rs)
+
+Runtime Compatibility
+- Tied to Tokio via sqlx runtime features; no async-std support documented. (premix-core/Cargo.toml, docs)
+
+Definition of Done: 3 interop scenarios validated.

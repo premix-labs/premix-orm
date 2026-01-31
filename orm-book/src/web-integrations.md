@@ -7,7 +7,7 @@ Premix provides built-in helpers for popular Rust web frameworks through feature
 Enable the `axum` feature in `Cargo.toml`:
 
 ```toml
-premix-orm = { version = "1.0.7-alpha", features = ["axum"] }
+premix-orm = { version = "1.0.8-alpha", features = ["axum"] }
 ```
 
 ### PremixState
@@ -49,7 +49,7 @@ async fn main() {
 Enable the `actix` feature in `Cargo.toml`:
 
 ```toml
-premix-orm = { version = "1.0.7-alpha", features = ["actix"] }
+premix-orm = { version = "1.0.8-alpha", features = ["actix"] }
 ```
 
 ### PremixData
@@ -85,7 +85,7 @@ async fn main() -> std::io::Result<()> {
 Enable the `metrics` feature in `premix-core` or `premix-orm`:
 
 ```toml
-premix-orm = { version = "1.0.7-alpha", features = ["metrics"] }
+premix-orm = { version = "1.0.8-alpha", features = ["metrics"] }
 ```
 
 ### Prometheus Support

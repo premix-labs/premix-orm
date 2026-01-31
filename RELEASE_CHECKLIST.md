@@ -14,13 +14,13 @@ Use this checklist before publishing a new version.
 - [x] Format and lint: `scripts/dev/run_fmt.ps1`
 - [x] Quick tests: `scripts/test/test_quick.ps1`
 - [x] Build workspace: `cargo build`
-- [x] Unit/integration tests: `cargo test -p premix-core --tests`, `cargo test -p premix-orm --tests`, `cargo test -p premix-cli --tests`
+- [x] Unit/integration tests: `cargo test --workspace --all-features`
 - [x] MySQL/Postgres integration tests (Docker + `DATABASE_URL`)
-- [x] Metrics tests: `cargo test -p premix-orm --test metrics_sqlite --features metrics`
+- [x] Metrics tests: `cargo test --workspace --all-features`
 
 ### Publish flow
 
-- [ ] Dry run publish (optional): `cargo publish --dry-run` per crate. (premix-core/premix-macros OK; premix-orm/premix-cli blocked until premix-core 1.0.7-alpha is on crates.io)
+- [x] Dry run publish (optional): `cargo publish --dry-run` per crate. (premix-core/premix-macros OK; premix-orm/premix-cli blocked until premix-core 1.0.8-alpha is on crates.io)
 - [ ] Publish order: `premix-core` -> `premix-macros` -> `premix-orm` -> `premix-cli`
 - [ ] Tag release and push tags (optional).
 

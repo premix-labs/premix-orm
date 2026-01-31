@@ -7,14 +7,14 @@ Premix supports SQLite, Postgres, and MySQL through `sqlx`.
 SQLite is enabled by default. Enable other databases explicitly:
 
 ```toml
-premix-orm = { version = "1.0.7-alpha", features = ["postgres"] }
+premix-orm = { version = "1.0.8-alpha", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
 For MySQL:
 
 ```toml
-premix-orm = { version = "1.0.7-alpha", features = ["mysql", "axum", "metrics"] }
+premix-orm = { version = "1.0.8-alpha", features = ["mysql", "axum", "metrics"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "mysql"] }
 ```
 

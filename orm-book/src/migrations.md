@@ -54,12 +54,21 @@ DROP TABLE users;
 
 ```bash
 premix migrate up
+
+# Preview pending migrations
+premix migrate up --dry-run
 ```
 
 ### Revert the Last Migration
 
 ```bash
 premix migrate down
+
+# Preview the migration that would be reverted
+premix migrate down --dry-run
+
+# Skip confirmation prompt
+premix migrate down --yes
 ```
 
 ### How Migrations Are Ordered
@@ -71,8 +80,10 @@ premix migrate down
 ## Notes and Constraints
 
 - The CLI targets SQLite by default; pass `--database` for other engines.
-- For Postgres, build the CLI with `--features postgres` before running.
+- For Postgres or MySQL, build the CLI with `--features postgres` or `--features mysql` before running.
 - The CLI reads `DATABASE_URL` if you do not pass `--database`.
+- Migrations are applied in a single transaction when supported.
+- SQLite `migrate down` may require table recreation and can cause data loss.
 
 ## Recommended Workflow
 

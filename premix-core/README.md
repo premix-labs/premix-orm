@@ -19,7 +19,7 @@ Most users should depend on `premix-orm` instead. Use `premix-core` directly onl
 
 ```toml
 [dependencies]
-premix-core = "1.0.7-alpha"
+premix-core = "1.0.8-alpha"
 ```
 
 ## Quick Start

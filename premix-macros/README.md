@@ -15,8 +15,8 @@ directly, you still need `premix-orm` because the generated code references it.
 
 ```toml
 [dependencies]
-premix-orm = "1.0.7-alpha"
-premix-macros = "1.0.7-alpha"
+premix-orm = "1.0.8-alpha"
+premix-macros = "1.0.8-alpha"
 ```
 
 ## Quick Start

@@ -60,6 +60,18 @@ let users = User::find_in_pool(&pool)
 - `update(json)`: Bulk update.
 - `delete()`: Bulk delete or soft delete.
 
+### Supported Filter Value Types
+
+Filter helpers accept these value types (all are bound as parameters):
+
+- `String` / `&str`
+- `i32`, `i64`, `f64`, `bool`
+- `uuid::Uuid`
+- `chrono::DateTime<Utc>`
+- `chrono::NaiveDateTime`, `chrono::NaiveDate`
+- `serde_json::Value` (bound as JSON; SQLite stores it as text)
+- `Option<String>` (maps to `NULL`)
+
 ## Filters and Safety
 
 Prefer the parameterized filter helpers (`filter_eq`, `filter_gt`, etc.) when

@@ -25,7 +25,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = "1.0.7-alpha"
+premix-orm = "1.0.8-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -36,7 +36,7 @@ serde = { version = "1", features = ["derive"] }
 Enable database features on both `premix-orm` and `sqlx`:
 
 ```toml
-premix-orm = { version = "1.0.7-alpha", features = ["postgres", "axum"] }
+premix-orm = { version = "1.0.8-alpha", features = ["postgres", "axum"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
@@ -76,6 +76,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // CRUD.
     let mut user = User { id: 0, name: "Alice".to_string(), deleted_at: None };
     user.save(&pool).await?;
+    user.name = "Alice Updated".to_string();
+    user.save(&pool).await?; // Updates when id is set.
 
     println!("Saved user with ID: {}", user.id);
     Ok(())
@@ -90,6 +92,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - SQLite, Postgres, and MySQL via `sqlx` feature flags
 - Axum and Actix-web integrations via feature flags
 - Prometheus metrics collection support
+
+## Error Mapping Helpers
+
+If you want domain errors instead of raw `sqlx::Error`, use `ModelResultExt`:
+
+```rust
+use premix_orm::prelude::*;
+
+# async fn example(pool: premix_orm::sqlx::SqlitePool) -> PremixResult<()> {
+let mut user = User { id: 1, name: "Alice".to_string() };
+user.save_result(&pool).await?;
+Ok(())
+# }
+```
+
+## Axum Integration
+
+Use `PremixState` as your Axum state wrapper:
+
+```rust
+use axum::{routing::get, Router};
+use premix_orm::{prelude::*, PremixState};
+
+async fn health() -> &'static str {
+    "ok"
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
+    Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
+
+    let app = Router::new()
+        .route("/health", get(health))
+        .with_state(PremixState::new(pool));
+
+    Ok(())
+}
+```
 
 ## Compatibility
 

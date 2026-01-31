@@ -16,7 +16,7 @@ cargo install premix-cli
 
 ## Features
 
-- Project initialization (placeholder scaffold)
+- Project initialization (scaffolds premix-sync / premix-schema)
 - SQL-based migrations (create, up, down)
 - Experimental schema sync command
 - Schema diff/migration via `premix schema` (requires `premix-schema` bin)
@@ -25,7 +25,7 @@ cargo install premix-cli
 
 ### Initialize a Project
 
-Currently a placeholder for future scaffolding.
+Scaffolds `src/bin/premix-sync.rs` and `src/bin/premix-schema.rs` templates.
 
 ```bash
 premix init
@@ -47,6 +47,7 @@ premix migrate create create_users
 #### Run Migrations (Up)
 
 Applies all pending migrations to the database.
+Migrations are applied in a transaction when supported.
 
 ```bash
 # Uses DATABASE_URL env var by default, or defaults to sqlite:premix.db
@@ -54,6 +55,9 @@ premix migrate up
 
 # Or specify database URL locally
 premix migrate up --database sqlite:my_app.db
+
+# Preview pending migrations
+premix migrate up --dry-run
 ```
 
 #### Revert Migration (Down)
@@ -62,7 +66,15 @@ Reverts the last applied migration.
 
 ```bash
 premix migrate down
+
+# Preview the migration that would be reverted
+premix migrate down --dry-run
+
+# Skip confirmation prompt
+premix migrate down --yes
 ```
+
+SQLite down migrations may require table recreation and can cause data loss.
 
 ### Sync Schema (Experimental)
 
@@ -70,6 +82,9 @@ Synchronize your Rust `#[derive(Model)]` structs with the database schema implic
 
 ```bash
 premix sync
+
+# Preview without running
+premix sync --dry-run
 ```
 
 The CLI looks for `src/bin/premix-sync.rs` and runs it. Use that binary to
@@ -85,6 +100,12 @@ Diff or generate migrations from local models (SQLite v1).
 ```bash
 premix schema diff --database sqlite:my_app.db
 premix schema migrate --database sqlite:my_app.db --out migrations/20260101000000_schema.sql
+
+# Preview generated SQL without writing a file
+premix schema migrate --database sqlite:my_app.db --dry-run
+
+# Skip confirmation prompt
+premix schema migrate --database sqlite:my_app.db --yes
 ```
 
 The CLI looks for `src/bin/premix-schema.rs` and runs it. That binary should
@@ -101,7 +122,7 @@ Recommended output includes a summary using
 
 ## Configuration
 
-The CLI primarily relies on the `DATABASE_URL` environment variable.
+The CLI primarily relies on the `DATABASE_URL` environment variable (auto-loaded from `.env`).
 
 ```bash
 # Example .env or shell export

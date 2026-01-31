@@ -189,7 +189,7 @@ cd premix-demo
 
 ```toml
 [dependencies]
-premix-orm = { version = "1.0.7-alpha", features = ["postgres", "axum"] }
+premix-orm = { version = "1.0.8-alpha", features = ["postgres", "axum"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -255,6 +255,15 @@ models, queries, relations, migrations, transactions, and limitations. For a map
 of the project layout, see [docs/guide/PROJECT_STRUCTURE.md](docs/guide/PROJECT_STRUCTURE.md).
 For transparency details, see [orm-book/src/glass-box.md](orm-book/src/glass-box.md).
 
+## Running Examples
+
+Examples live under `examples/`. Start with:
+
+```bash
+cd examples/basic-app
+cargo run
+```
+
 ## Architecture (At a Glance)
 
 ![Premix ORM Architecture](assets/premix-orm-architecture.svg)
@@ -279,6 +288,31 @@ SQL inspection helpers. For macro expansion and SQL flow, see
 [orm-book/src/glass-box.md](orm-book/src/glass-box.md).
 
 ## Advanced Features
+
+### Axum Integration
+
+Use `PremixState` as your Axum state wrapper:
+
+```rust
+use axum::{routing::get, Router};
+use premix_orm::{prelude::*, PremixState};
+
+async fn health() -> &'static str {
+    "ok"
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = Premix::smart_sqlite_pool("sqlite::memory:").await?;
+    Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;
+
+    let app = Router::new()
+        .route("/health", get(health))
+        .with_state(PremixState::new(pool));
+
+    Ok(())
+}
+```
 
 ### Soft Deletes
 
@@ -357,7 +391,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-premix-orm = { version = "1.0.7-alpha", features = ["postgres", "axum"] }
+premix-orm = { version = "1.0.8-alpha", features = ["postgres", "axum"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -380,6 +414,14 @@ serde = { version = "1", features = ["derive"] }
 - **`DATABASE_URL`**: CLI uses it by default; pass `--database` if needed.
 - **`migrate down`**: requires a valid `-- down` section in your migration file.
 - **Bulk update examples**: add `serde_json` if you use `json!` helpers.
+- **Save vs update**: `save()` updates when `id` is set and inserts when `id == 0`.
+- **Error mapping**: `ModelResultExt` maps `sqlx::Error` into `PremixError`.
+
+## Safety Rails (Quick Notes)
+
+- Raw filters (`filter_raw`) require `.allow_unsafe()` and log `RAW(<redacted>)`.
+- Bulk update/delete require filters unless you explicitly allow unsafe paths.
+- `unsafe_fast()` skips logging/metrics and safety guards by design.
 
 ## Performance Tuning
 

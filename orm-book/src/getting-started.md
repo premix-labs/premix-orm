@@ -15,7 +15,7 @@ definition, connection, schema sync, and a simple query.
 
 ```toml
 [dependencies]
-premix-orm = "1.0.7-alpha"
+premix-orm = "1.0.8-alpha"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -26,7 +26,7 @@ serde = { version = "1", features = ["derive"] }
 Enable the database features you need on both `premix-orm` and `sqlx`:
 
 ```toml
-premix-orm = { version = "1.0.7-alpha", features = ["postgres"] }
+premix-orm = { version = "1.0.8-alpha", features = ["postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
 ```
 
@@ -116,6 +116,8 @@ let users = User::find_in_pool(&pool)
 # }
 ```
 
+When `id` is non-zero, `save()` attempts an UPDATE first and falls back to INSERT.
+
 ## 6. Optional: CLI Migrations
 
 Install the CLI:
@@ -141,4 +143,5 @@ premix migrate up
 - Enable database and integration features (e.g., `axum`, `actix`) on `premix-orm`.
 - The CLI reads `DATABASE_URL` or defaults to `sqlite:premix.db`.
 - `premix migrate down` reverts the most recent migration.
+- SQLite down migrations may require table recreation and can cause data loss.
 - `filter()`/`filter_raw()` accept raw SQL strings and require `.allow_unsafe()`; use carefully to avoid injection.

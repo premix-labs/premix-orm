@@ -32,6 +32,11 @@ This section documents current constraints so expectations are clear.
 - The CLI targets SQLite by default.
 - `premix migrate down` reverts the most recent migration only.
 - Auto-sync is intended for development and prototyping, not production.
+- SQLite down migrations may require table recreation and can cause data loss.
+
+## Runtime
+
+- Premix targets the Tokio runtime (`sqlx` runtime-tokio). `async-std` is not supported.
 
 ## Safety Guards
 

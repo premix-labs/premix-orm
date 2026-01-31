@@ -74,6 +74,22 @@ If your model has an `id` field, Premix treats it as the primary key. When
 supports it). After `save()`, the struct `id` is updated with the generated
 value.
 
+When `id` is set to a non-zero value, `save()` attempts an UPDATE first and
+falls back to INSERT if the row does not exist. This makes `save()` safe for
+simple upsert-like flows when you already have an ID.
+
+If you want domain errors instead of raw `sqlx::Error`, use `ModelResultExt`:
+
+```rust,no_run
+use premix_orm::prelude::*;
+
+# async fn example(pool: premix_orm::sqlx::SqlitePool) -> PremixResult<()> {
+let mut user = User { id: 1, name: "Alice".to_string() };
+user.save_result(&pool).await?;
+Ok(())
+# }
+```
+
 ## Ignoring Fields
 
 You can keep in-memory fields on the struct with `#[premix(ignore)]`:

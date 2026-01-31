@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8-alpha] - 2026-01-31
+
+### Added
+
+- **Schema:** Added MySQL schema introspection + diff + migration SQL support.
+- **Query Builder:** Added bind support for `NaiveDate`, `NaiveDateTime`, and JSON values.
+- **Errors:** Added `PremixError` + `ModelResultExt` to map sqlx errors into domain-friendly results.
+- **CLI:** Added `init` scaffolding for `premix-sync` + `premix-schema` and `.env` auto-load in CLI.
+- **Docs:** Expanded CLI schema diff usage and added runtime limitations notes.
+
+### Changed
+
+- **Query Builder:** `unsafe_fast()`/`ultra_fast()` no longer auto-enable `allow_unsafe()`.
+- **Performance:** Cached relation and insert SQL strings to reduce allocations.
+
+### Fixed
+
+- **Model Save:** `save()` now updates when `id != 0` and handles versioned updates more safely.
+- **CLI Schema:** Schema helper template now supports SQLite/Postgres/MySQL with feature gating.
+
 ## [1.0.7-alpha] - 2026-01-30
 
 ### Added
