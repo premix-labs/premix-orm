@@ -1,6 +1,6 @@
 [package]
 name = "premix-core"
-version = "1.0.8-alpha"
+version = "1.0.9-alpha"
 edition = "2024"
 description = "A Zero-Overhead, Type-Safe ORM for Rust that runs optimized SQL."
 license = "MIT"

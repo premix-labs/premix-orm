@@ -1,6 +1,6 @@
 [package]
 name = "premix-orm"
-version = "1.0.8-alpha"
+version = "1.0.9-alpha"
 edition = "2024"
 description = "Alpha research ORM for Rust. Facade crate for premix-core and premix-macros (not production-ready)."
 license = "MIT"
@@ -31,8 +31,8 @@ metrics = [
 ] # เปิดใช้งานการส่ง Metrics (Prometheus) สำหรับ Pool stats
 
 [dependencies]
-premix-core = { version = "=1.0.8-alpha", path = "../premix-core" }
-premix-macros = { version = "=1.0.8-alpha", path = "../premix-macros" }
+premix-core = { version = "=1.0.9-alpha", path = "../premix-core" }
+premix-macros = { version = "=1.0.9-alpha", path = "../premix-macros" }
 axum = { version = "0.7", optional = true }
 actix-web = { version = "4", optional = true }
 sqlx = { version = "0.8", default-features = false }

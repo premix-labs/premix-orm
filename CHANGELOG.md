@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9-alpha] - 2026-01-31
+
+### Added
+
+- **CLI:** Source scanning for `#[derive(Model)]` removes the need for `premix-sync`/`premix-schema` helpers.
+- **CLI:** SQLite WAL mode + retry-with-backoff for common file-lock errors on Windows.
+- **CLI:** Optional rustc termination signal on lock retries (`PREMIX_SIGNAL_RUSTC=1`).
+- **Relations:** `#[has_many(..., eager)]` for default eager loading.
+- **Relations:** Typed include handles via `Model::relation` constants (e.g., `User::posts`).
+- **Model API:** Added `Model::all`, `Model::create`, `Model::find_one`, and `Model::update_by_id`.
+
+### Changed
+
+- **Relations:** Eager loading now errors with a list of valid relations when an include is misspelled.
+
 ## [1.0.8-alpha] - 2026-01-31
 
 ### Added
