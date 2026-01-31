@@ -5,18 +5,25 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
+    time::Duration,
 };
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 #[cfg(feature = "sqlite")]
 use premix_core::schema;
+use premix_core::schema::SchemaTable;
 use premix_core::{Migration, Migrator};
+#[cfg(feature = "sqlite")]
+use sqlx::SqlitePool;
 #[cfg(feature = "postgres")]
 use sqlx::postgres::PgPoolOptions;
 #[cfg(feature = "sqlite")]
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous};
 use walkdir::WalkDir;
+
+mod source_scan;
+use source_scan::{DbKind, scan_models_schema};
 
 #[derive(Parser)]
 #[command(name = "premix")]
@@ -136,40 +143,37 @@ async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync
         Commands::Sync { database, dry_run } => {
             println!(">> Scanning for models...");
             let db_url = resolve_db_url(database);
-            println!(">> Connecting to {}...", db_url);
-            if dry_run {
-                if Path::new("src/bin/premix-sync.rs").exists() {
-                    println!(
-                        "[INFO] Dry run: would execute premix-sync with DATABASE_URL={}.",
-                        db_url
-                    );
-                } else {
-                    println!(
-                        "[WARN] No premix-sync binary found. Create src/bin/premix-sync.rs to enable CLI sync."
-                    );
-                }
+            let db_kind = DbKind::from_url(&db_url);
+            let expected = scan_models_schema(Path::new("src"), db_kind)?;
+            if expected.is_empty() {
+                println!(
+                    "[WARN] No models with #[derive(Model)] found under src/. Nothing to sync."
+                );
                 return Ok(());
             }
-            match run_sync(&db_url)? {
-                true => println!("[OK] Sync completed via premix-sync binary."),
-                false => println!(
-                    "[WARN] No premix-sync binary found. Create src/bin/premix-sync.rs to enable CLI sync."
-                ),
+            println!(">> Connecting to {}...", db_url);
+            if dry_run {
+                print_sync_dry_run(&expected, db_kind);
+                return Ok(());
             }
+            run_sync_scanned(&db_url, db_kind, &expected).await?;
+            println!("[OK] Sync completed.");
         }
         Commands::Schema { action } => match action {
             SchemaAction::Diff { database } => {
                 let db_url = resolve_db_url(database);
-                println!(">> Connecting to {}...", db_url);
-                match run_schema_diff(&db_url)? {
-                    Some(output) => {
-                        print!("{}", output);
-                        println!("[OK] Schema diff complete.");
-                    }
-                    None => println!(
-                        "[WARN] No premix-schema binary found. Create src/bin/premix-schema.rs to enable CLI schema diff."
-                    ),
+                let db_kind = DbKind::from_url(&db_url);
+                let expected = scan_models_schema(Path::new("src"), db_kind)?;
+                if expected.is_empty() {
+                    println!(
+                        "[WARN] No models with #[derive(Model)] found under src/. Nothing to diff."
+                    );
+                    return Ok(());
                 }
+                println!(">> Connecting to {}...", db_url);
+                let output = run_schema_diff(&db_url, &expected).await?;
+                print!("{}", output);
+                println!("[OK] Schema diff complete.");
             }
             SchemaAction::Migrate {
                 database,
@@ -178,23 +182,28 @@ async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync
                 yes,
             } => {
                 let db_url = resolve_db_url(database);
+                let db_kind = DbKind::from_url(&db_url);
+                let expected = scan_models_schema(Path::new("src"), db_kind)?;
+                if expected.is_empty() {
+                    println!(
+                        "[WARN] No models with #[derive(Model)] found under src/. Nothing to migrate."
+                    );
+                    return Ok(());
+                }
                 println!(">> Connecting to {}...", db_url);
-                match run_schema_migrate(&db_url, out, dry_run, yes)? {
-                    Some(SchemaMigrateOutcome::Created(path)) => {
+                match run_schema_migrate(&db_url, &expected, out, dry_run, yes).await? {
+                    SchemaMigrateOutcome::Created(path) => {
                         println!("[OK] Schema migration created: {}", path.to_string_lossy());
                     }
-                    Some(SchemaMigrateOutcome::DryRun) => {
+                    SchemaMigrateOutcome::DryRun => {
                         println!("[OK] Schema migration dry run complete.");
                     }
-                    Some(SchemaMigrateOutcome::NoChanges) => {
+                    SchemaMigrateOutcome::NoChanges => {
                         println!("[INFO] Schema diff: no changes.");
                     }
-                    Some(SchemaMigrateOutcome::Aborted) => {
+                    SchemaMigrateOutcome::Aborted => {
                         println!("[INFO] Schema migration aborted.");
                     }
-                    None => println!(
-                        "[WARN] No premix-schema binary found. Create src/bin/premix-schema.rs to enable CLI schema migrations."
-                    ),
                 }
             }
         },
@@ -274,171 +283,9 @@ async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync
 }
 
 fn init_project() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let bin_dir = Path::new("src/bin");
-    if !bin_dir.exists() {
-        fs::create_dir_all(bin_dir)?;
-    }
-
-    let sync_path = bin_dir.join("premix-sync.rs");
-    if !sync_path.exists() {
-        fs::write(&sync_path, premix_sync_template())?;
-        println!("[OK] Created {}", sync_path.to_string_lossy());
-    } else {
-        println!(
-            "[INFO] {} already exists. Skipping.",
-            sync_path.to_string_lossy()
-        );
-    }
-
-    let schema_path = bin_dir.join("premix-schema.rs");
-    if !schema_path.exists() {
-        fs::write(&schema_path, premix_schema_template())?;
-        println!("[OK] Created {}", schema_path.to_string_lossy());
-    } else {
-        println!(
-            "[INFO] {} already exists. Skipping.",
-            schema_path.to_string_lossy()
-        );
-    }
-
+    println!("[INFO] premix init no longer creates premix-sync/premix-schema binaries.");
+    println!("[INFO] The CLI scans src/ for #[derive(Model)] automatically.");
     Ok(())
-}
-
-fn premix_sync_template() -> &'static str {
-    "use premix_orm::prelude::*;\n\
-\n\
-// Add your models here.\n\
-#[derive(Model, Debug, Clone)]\n\
-struct User {\n\
-    id: i32,\n\
-    name: String,\n\
-}\n\
-\n\
-#[tokio::main]\n\
-async fn main() -> Result<(), Box<dyn std::error::Error>> {\n\
-    let db_url = std::env::var(\"DATABASE_URL\").unwrap_or_else(|_| \"sqlite:premix.db\".to_string());\n\
-    let pool = premix_orm::sqlx::SqlitePool::connect(&db_url).await?;\n\
-\n\
-    Premix::sync::<premix_orm::sqlx::Sqlite, User>(&pool).await?;\n\
-    Ok(())\n\
-}\n"
-}
-
-fn premix_schema_template() -> &'static str {
-    "use premix_orm::prelude::*;\n\
-use premix_orm::schema::format_schema_diff_summary;\n\
-\n\
-// Add your models here.\n\
-#[derive(Model, Debug, Clone)]\n\
-struct User {\n\
-    id: i32,\n\
-    name: String,\n\
-}\n\
-\n\
-fn usage() {\n\
-    eprintln!(\"Usage: premix-schema <diff|migrate>\");\n\
-}\n\
-\n\
-#[tokio::main]\n\
-async fn main() -> Result<(), Box<dyn std::error::Error>> {\n\
-    let mut args = std::env::args().skip(1);\n\
-    let command = match args.next() {\n\
-        Some(cmd) => cmd,\n\
-        None => {\n\
-            usage();\n\
-            std::process::exit(1);\n\
-        }\n\
-    };\n\
-\n\
-    let db_url = std::env::var(\"DATABASE_URL\").unwrap_or_else(|_| \"sqlite:premix.db\".to_string());\n\
-    let expected = vec![User::schema()];\n\
-\n\
-    if db_url.starts_with(\"postgres://\") || db_url.starts_with(\"postgresql://\") {\n\
-        #[cfg(feature = \"postgres\")]\n\
-        {\n\
-            use premix_orm::schema::{diff_postgres_schema, postgres_migration_sql};\n\
-            let pool = premix_orm::sqlx::PgPool::connect(&db_url).await?;\n\
-            match command.as_str() {\n\
-                \"diff\" => {\n\
-                    let diff = diff_postgres_schema(&pool, &expected).await?;\n\
-                    let summary = format_schema_diff_summary(&diff);\n\
-                    println!(\"{}\", summary);\n\
-                }\n\
-                \"migrate\" => {\n\
-                    let diff = diff_postgres_schema(&pool, &expected).await?;\n\
-                    let sql = postgres_migration_sql(&expected, &diff);\n\
-                    if !sql.is_empty() {\n\
-                        println!(\"{}\", sql.join(\";\\n\"));\n\
-                        println!(\";\");\n\
-                    }\n\
-                }\n\
-                _ => {\n\
-                    usage();\n\
-                    std::process::exit(1);\n\
-                }\n\
-            }\n\
-        }\n\
-        #[cfg(not(feature = \"postgres\"))]\n\
-        {\n\
-            eprintln!(\"Postgres support is not enabled. Rebuild with --features postgres.\");\n\
-            std::process::exit(1);\n\
-        }\n\
-    } else if db_url.starts_with(\"mysql://\") {\n\
-        #[cfg(feature = \"mysql\")]\n\
-        {\n\
-            use premix_orm::schema::{diff_mysql_schema, mysql_migration_sql};\n\
-            let pool = premix_orm::sqlx::MySqlPool::connect(&db_url).await?;\n\
-            match command.as_str() {\n\
-                \"diff\" => {\n\
-                    let diff = diff_mysql_schema(&pool, &expected).await?;\n\
-                    let summary = format_schema_diff_summary(&diff);\n\
-                    println!(\"{}\", summary);\n\
-                }\n\
-                \"migrate\" => {\n\
-                    let diff = diff_mysql_schema(&pool, &expected).await?;\n\
-                    let sql = mysql_migration_sql(&expected, &diff);\n\
-                    if !sql.is_empty() {\n\
-                        println!(\"{}\", sql.join(\";\\n\"));\n\
-                        println!(\";\");\n\
-                    }\n\
-                }\n\
-                _ => {\n\
-                    usage();\n\
-                    std::process::exit(1);\n\
-                }\n\
-            }\n\
-        }\n\
-        #[cfg(not(feature = \"mysql\"))]\n\
-        {\n\
-            eprintln!(\"MySQL support is not enabled. Rebuild with --features mysql.\");\n\
-            std::process::exit(1);\n\
-        }\n\
-    } else {\n\
-        use premix_orm::schema::{diff_sqlite_schema, sqlite_migration_sql};\n\
-        let pool = premix_orm::sqlx::SqlitePool::connect(&db_url).await?;\n\
-        match command.as_str() {\n\
-            \"diff\" => {\n\
-                let diff = diff_sqlite_schema(&pool, &expected).await?;\n\
-                let summary = format_schema_diff_summary(&diff);\n\
-                println!(\"{}\", summary);\n\
-            }\n\
-            \"migrate\" => {\n\
-                let diff = diff_sqlite_schema(&pool, &expected).await?;\n\
-                let sql = sqlite_migration_sql(&expected, &diff);\n\
-                if !sql.is_empty() {\n\
-                    println!(\"{}\", sql.join(\";\\n\"));\n\
-                    println!(\";\");\n\
-                }\n\
-            }\n\
-            _ => {\n\
-                usage();\n\
-                std::process::exit(1);\n\
-            }\n\
-        }\n\
-    }\n\
-\n\
-    Ok(())\n\
-}\n"
 }
 
 fn confirm_action(prompt: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
@@ -578,21 +425,25 @@ async fn last_applied_migration(
 async fn applied_versions_sqlite(
     db_url: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
-    let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
-    let pool = SqlitePool::connect_with(options).await?;
-    let table: Option<String> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='_premix_migrations'",
-    )
-    .fetch_optional(&pool)
+    let pool = with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
+    let table: Option<String> = with_sqlite_retry("check migrations table", || async {
+        sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='_premix_migrations'",
+        )
+        .fetch_optional(&pool)
+        .await
+    })
     .await?;
     if table.is_none() {
         return Ok(Vec::new());
     }
 
-    let versions: Vec<String> =
+    let versions: Vec<String> = with_sqlite_retry("load migrations versions", || async {
         sqlx::query_scalar("SELECT version FROM _premix_migrations ORDER BY version ASC")
             .fetch_all(&pool)
-            .await?;
+            .await
+    })
+    .await?;
     Ok(versions)
 }
 
@@ -621,12 +472,14 @@ async fn last_applied_sqlite(
     db_url: &str,
     migrations: &[Migration],
 ) -> Result<Option<Migration>, Box<dyn std::error::Error + Send + Sync>> {
-    let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
-    let pool = SqlitePool::connect_with(options).await?;
-    let table: Option<String> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='_premix_migrations'",
-    )
-    .fetch_optional(&pool)
+    let pool = with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
+    let table: Option<String> = with_sqlite_retry("check migrations table", || async {
+        sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='_premix_migrations'",
+        )
+        .fetch_optional(&pool)
+        .await
+    })
     .await?;
     if table.is_none() {
         return Ok(None);
@@ -638,11 +491,14 @@ async fn last_applied_sqlite(
         "SELECT version FROM _premix_migrations WHERE version IN ({}) ORDER BY version DESC LIMIT 1",
         placeholders
     );
-    let mut query = sqlx::query_scalar::<sqlx::Sqlite, String>(&sql);
-    for version in &versions {
-        query = query.bind(version);
-    }
-    let last = query.fetch_optional(&pool).await?;
+    let last = with_sqlite_retry("select last migration", || async {
+        let mut query = sqlx::query_scalar::<sqlx::Sqlite, String>(&sql);
+        for version in &versions {
+            query = query.bind(version);
+        }
+        query.fetch_optional(&pool).await
+    })
+    .await?;
     Ok(last.and_then(|version| migrations.iter().find(|m| m.version == version).cloned()))
 }
 
@@ -790,8 +646,8 @@ async fn run_scaffold(
 
     #[cfg(feature = "sqlite")]
     {
-        let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
-        let pool = SqlitePool::connect_with(options).await?;
+        let pool =
+            with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
         return scaffold_sqlite(&pool, table).await;
     }
 
@@ -873,6 +729,86 @@ fn resolve_db_url(database: Option<String>) -> String {
         .unwrap_or_else(|| "sqlite:premix.db".to_string())
 }
 
+#[cfg(feature = "sqlite")]
+fn sqlite_connect_options(db_url: &str) -> Result<SqliteConnectOptions, sqlx::Error> {
+    let options = SqliteConnectOptions::from_str(db_url)?
+        .create_if_missing(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .statement_cache_capacity(200)
+        .busy_timeout(Duration::from_secs(5));
+    Ok(options)
+}
+
+#[cfg(feature = "sqlite")]
+async fn sqlite_pool(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
+    SqlitePool::connect_with(sqlite_connect_options(db_url)?).await
+}
+
+#[cfg(feature = "sqlite")]
+fn is_retryable_sqlite_error(err: &sqlx::Error) -> bool {
+    match err {
+        sqlx::Error::Io(io) => io.raw_os_error() == Some(32),
+        sqlx::Error::Database(db) => {
+            let msg = db.message().to_ascii_lowercase();
+            msg.contains("database is locked")
+                || msg.contains("database is busy")
+                || msg.contains("sqlite_busy")
+                || msg.contains("lock")
+        }
+        _ => false,
+    }
+}
+
+#[cfg(feature = "sqlite")]
+async fn with_sqlite_retry<T, F, Fut>(label: &str, mut f: F) -> Result<T, sqlx::Error>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, sqlx::Error>>,
+{
+    let mut attempt = 0usize;
+    let mut delay = Duration::from_millis(50);
+    loop {
+        match f().await {
+            Ok(value) => return Ok(value),
+            Err(err) if is_retryable_sqlite_error(&err) && attempt < 6 => {
+                attempt += 1;
+                eprintln!(
+                    "[WARN] SQLite busy/locked during {}, retrying (attempt {}).",
+                    label, attempt
+                );
+                if attempt == 1 {
+                    try_release_rustc_handles();
+                }
+                tokio::time::sleep(delay).await;
+                delay = std::cmp::min(delay * 2, Duration::from_millis(800));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+fn try_release_rustc_handles() {
+    let enabled = std::env::var("PREMIX_SIGNAL_RUSTC").ok();
+    if enabled.as_deref() != Some("1") {
+        return;
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/IM", "rustc.exe", "/T"])
+            .status();
+        eprintln!("[INFO] Sent taskkill to rustc.exe (PREMIX_SIGNAL_RUSTC=1).");
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("pkill").args(["-TERM", "rustc"]).status();
+        eprintln!("[INFO] Sent SIGTERM to rustc (PREMIX_SIGNAL_RUSTC=1).");
+    }
+}
+
 fn create_migration_file(
     name: &str,
     dir_path: &Path,
@@ -929,8 +865,8 @@ async fn run_migrations_up(
 
     #[cfg(feature = "sqlite")]
     {
-        let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
-        let pool = SqlitePool::connect_with(options).await?;
+        let pool =
+            with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
         let migrator = Migrator::new(pool);
         migrator.run(migrations).await?;
         Ok(true)
@@ -971,8 +907,8 @@ async fn run_migrations_down(
 
     #[cfg(feature = "sqlite")]
     {
-        let options = SqliteConnectOptions::from_str(db_url)?.create_if_missing(true);
-        let pool = SqlitePool::connect_with(options).await?;
+        let pool =
+            with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
         let migrator = Migrator::new(pool);
         return migrator.rollback_last(migrations).await;
     }
@@ -1042,86 +978,174 @@ fn load_migrations(path: &str) -> Result<Vec<Migration>, Box<dyn std::error::Err
     Ok(migrations)
 }
 
-fn run_sync(db_url: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    let sync_entry = Path::new("src/bin/premix-sync.rs");
-    if !sync_entry.exists() {
-        return Ok(false);
+fn print_sync_dry_run(expected: &[SchemaTable], db_kind: DbKind) {
+    println!("[INFO] Dry run: would create {} tables.", expected.len());
+    for table in expected {
+        let sql = create_sql_for_table(table, db_kind);
+        println!("-- {}", table.name);
+        println!("{}", sql);
     }
-
-    let status = Command::new("cargo")
-        .args(["run", "--quiet", "--bin", "premix-sync"])
-        .env("DATABASE_URL", db_url)
-        .status()?;
-
-    if !status.success() {
-        return Err("premix-sync failed. Check the binary output.".into());
-    }
-
-    Ok(true)
 }
 
-fn run_schema_diff(
+async fn run_sync_scanned(
     db_url: &str,
-) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-    let schema_entry = Path::new("src/bin/premix-schema.rs");
-    if !schema_entry.exists() {
-        return Ok(None);
+    db_kind: DbKind,
+    expected: &[SchemaTable],
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if db_url.starts_with("mysql://") {
+        return Err(
+            "MySQL support is not enabled. Rebuild premix-cli with --features mysql.".into(),
+        );
     }
+    if db_url.starts_with("postgres://") || db_url.starts_with("postgresql://") {
+        #[cfg(feature = "postgres")]
+        {
+            let pool = PgPoolOptions::new().connect(db_url).await?;
+            for table in expected {
+                let sql = create_sql_for_table(table, db_kind);
+                sqlx::query(&sql).execute(&pool).await?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "postgres"))]
+        {
+            Err(
+                "Postgres support is not enabled. Rebuild premix-cli with --features postgres."
+                    .into(),
+            )
+        }
+    } else {
+        #[cfg(feature = "sqlite")]
+        {
+            let pool =
+                with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
+            for table in expected {
+                let sql = create_sql_for_table(table, db_kind);
+                with_sqlite_retry("sync create table", || async {
+                    sqlx::query(&sql).execute(&pool).await.map(|_| ())
+                })
+                .await?;
+            }
+            Ok(())
+        }
 
-    let output = Command::new("cargo")
-        .args(["run", "--quiet", "--bin", "premix-schema", "--", "diff"])
-        .env("DATABASE_URL", db_url)
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("premix-schema diff failed: {}", stderr.trim()).into());
+        #[cfg(not(feature = "sqlite"))]
+        {
+            Err("SQLite support is not enabled. Rebuild premix-cli with --features sqlite.".into())
+        }
     }
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(Some(stdout))
 }
 
-fn run_schema_migrate(
+async fn run_schema_diff(
     db_url: &str,
+    expected: &[SchemaTable],
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    if db_url.starts_with("mysql://") {
+        return Err(
+            "MySQL support is not enabled. Rebuild premix-cli with --features mysql.".into(),
+        );
+    }
+    if db_url.starts_with("postgres://") || db_url.starts_with("postgresql://") {
+        #[cfg(feature = "postgres")]
+        {
+            let pool = PgPoolOptions::new().connect(db_url).await?;
+            let diff = schema::diff_postgres_schema(&pool, expected).await?;
+            Ok(schema::format_schema_diff_summary(&diff))
+        }
+        #[cfg(not(feature = "postgres"))]
+        {
+            Err(
+                "Postgres support is not enabled. Rebuild premix-cli with --features postgres."
+                    .into(),
+            )
+        }
+    } else {
+        #[cfg(feature = "sqlite")]
+        {
+            let pool =
+                with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
+            let diff = with_sqlite_retry("schema diff", || async {
+                schema::diff_sqlite_schema(&pool, expected).await
+            })
+            .await?;
+            Ok(schema::format_schema_diff_summary(&diff))
+        }
+
+        #[cfg(not(feature = "sqlite"))]
+        {
+            Err("SQLite support is not enabled. Rebuild premix-cli with --features sqlite.".into())
+        }
+    }
+}
+
+async fn run_schema_migrate(
+    db_url: &str,
+    expected: &[SchemaTable],
     out: Option<PathBuf>,
     dry_run: bool,
     yes: bool,
-) -> Result<Option<SchemaMigrateOutcome>, Box<dyn std::error::Error + Send + Sync>> {
-    let schema_entry = Path::new("src/bin/premix-schema.rs");
-    if !schema_entry.exists() {
-        return Ok(None);
+) -> Result<SchemaMigrateOutcome, Box<dyn std::error::Error + Send + Sync>> {
+    if db_url.starts_with("mysql://") {
+        return Err(
+            "MySQL support is not enabled. Rebuild premix-cli with --features mysql.".into(),
+        );
     }
-
-    if let Some(summary) = run_schema_diff(db_url)? {
-        if !summary.trim().is_empty() {
-            print!("{}", summary);
+    let (diff, sql_statements) = if db_url.starts_with("postgres://")
+        || db_url.starts_with("postgresql://")
+    {
+        #[cfg(feature = "postgres")]
+        {
+            let pool = PgPoolOptions::new().connect(db_url).await?;
+            let diff = schema::diff_postgres_schema(&pool, expected).await?;
+            let sql = schema::postgres_migration_sql(expected, &diff);
+            (diff, sql)
         }
+        #[cfg(not(feature = "postgres"))]
+        {
+            return Err(
+                "Postgres support is not enabled. Rebuild premix-cli with --features postgres."
+                    .into(),
+            );
+        }
+    } else {
+        #[cfg(feature = "sqlite")]
+        {
+            let pool =
+                with_sqlite_retry("sqlite connect", || async { sqlite_pool(db_url).await }).await?;
+            let diff = with_sqlite_retry("schema diff", || async {
+                schema::diff_sqlite_schema(&pool, expected).await
+            })
+            .await?;
+            let sql = schema::sqlite_migration_sql(expected, &diff);
+            (diff, sql)
+        }
+        #[cfg(not(feature = "sqlite"))]
+        {
+            return Err(
+                "SQLite support is not enabled. Rebuild premix-cli with --features sqlite.".into(),
+            );
+        }
+    };
+
+    let summary = schema::format_schema_diff_summary(&diff);
+    if !summary.trim().is_empty() {
+        print!("{}", summary);
+        println!();
     }
 
-    let output = Command::new("cargo")
-        .args(["run", "--quiet", "--bin", "premix-schema", "--", "migrate"])
-        .env("DATABASE_URL", db_url)
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("premix-schema migrate failed: {}", stderr.trim()).into());
+    if sql_statements.is_empty() {
+        return Ok(SchemaMigrateOutcome::NoChanges);
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let sql = stdout.trim();
-    if sql.is_empty() {
-        return Ok(Some(SchemaMigrateOutcome::NoChanges));
-    }
+    let sql = format!("{};\n", sql_statements.join(";\n"));
 
     if dry_run {
         println!("{}", sql);
-        return Ok(Some(SchemaMigrateOutcome::DryRun));
+        return Ok(SchemaMigrateOutcome::DryRun);
     }
 
     if !yes && !confirm_action("Generate schema migration file?")? {
-        return Ok(Some(SchemaMigrateOutcome::Aborted));
+        return Ok(SchemaMigrateOutcome::Aborted);
     }
 
     let path = if let Some(path) = out {
@@ -1130,14 +1154,42 @@ fn run_schema_migrate(
                 fs::create_dir_all(parent)?;
             }
         }
-        write_schema_migration_file(sql, &path)?;
+        write_schema_migration_file(sql.trim(), &path)?;
         path
     } else {
         let dir_path = Path::new("migrations");
-        create_schema_migration_file(sql, dir_path)?
+        create_schema_migration_file(sql.trim(), dir_path)?
     };
 
-    Ok(Some(SchemaMigrateOutcome::Created(path)))
+    Ok(SchemaMigrateOutcome::Created(path))
+}
+
+fn create_sql_for_table(table: &SchemaTable, db_kind: DbKind) -> String {
+    let mut cols = Vec::new();
+    for col in &table.columns {
+        if col.primary_key {
+            cols.push(format!("{} {}", col.name, auto_increment_pk(db_kind)));
+            continue;
+        }
+        let mut def = format!("{} {}", col.name, col.sql_type);
+        if !col.nullable {
+            def.push_str(" NOT NULL");
+        }
+        cols.push(def);
+    }
+    format!(
+        "CREATE TABLE IF NOT EXISTS {} ({})",
+        table.name,
+        cols.join(", ")
+    )
+}
+
+fn auto_increment_pk(db_kind: DbKind) -> &'static str {
+    match db_kind {
+        DbKind::Sqlite => "INTEGER PRIMARY KEY",
+        DbKind::Postgres => "SERIAL PRIMARY KEY",
+        DbKind::Mysql => "INTEGER AUTO_INCREMENT PRIMARY KEY",
+    }
 }
 
 fn create_schema_migration_file(
@@ -1200,6 +1252,21 @@ mod tests {
     fn sqlite_test_url(root: &Path) -> String {
         let db_path = root.join("test.db");
         format!("sqlite:{}", db_path.to_string_lossy().replace('\\', "/"))
+    }
+
+    fn write_sample_model(root: &Path) {
+        let src_dir = root.join("src");
+        fs::create_dir_all(&src_dir).unwrap();
+        let content = r#"
+use premix_orm::prelude::*;
+
+#[derive(Model, Debug, Clone)]
+struct User {
+    id: i32,
+    name: String,
+}
+"#;
+        fs::write(src_dir.join("main.rs"), content.trim()).unwrap();
     }
 
     #[test]
@@ -1594,27 +1661,47 @@ mod tests {
 
     #[tokio::test]
     async fn cli_run_sync_ok() {
-        run_cli(Cli {
+        let root = make_temp_dir();
+        write_sample_model(&root);
+
+        let _lock = CWD_LOCK.lock().unwrap();
+        let old_cwd = env::current_dir().unwrap();
+        env::set_current_dir(&root).unwrap();
+
+        let result = run_cli(Cli {
             command: Commands::Sync {
-                database: Some("sqlite:dev.db".to_string()),
+                database: Some(sqlite_test_url(&root)),
                 dry_run: true,
             },
         })
-        .await
-        .unwrap();
+        .await;
+
+        env::set_current_dir(old_cwd).unwrap();
+        result.unwrap();
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
     async fn cli_run_schema_diff_ok() {
-        run_cli(Cli {
+        let root = make_temp_dir();
+        write_sample_model(&root);
+
+        let _lock = CWD_LOCK.lock().unwrap();
+        let old_cwd = env::current_dir().unwrap();
+        env::set_current_dir(&root).unwrap();
+
+        let result = run_cli(Cli {
             command: Commands::Schema {
                 action: SchemaAction::Diff {
-                    database: Some("sqlite:dev.db".to_string()),
+                    database: Some(sqlite_test_url(&root)),
                 },
             },
         })
-        .await
-        .unwrap();
+        .await;
+
+        env::set_current_dir(old_cwd).unwrap();
+        result.unwrap();
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
@@ -1637,12 +1724,9 @@ mod tests {
         let root = make_temp_dir();
         fs::create_dir_all(root.join("migrations")).unwrap();
 
-        {
-            let _lock = CWD_LOCK.lock().unwrap();
-            let _old_cwd = env::current_dir().unwrap();
-            env::set_current_dir(&root).unwrap();
-            drop(_lock);
-        }
+        let _lock = CWD_LOCK.lock().unwrap();
+        let old_cwd = env::current_dir().unwrap();
+        env::set_current_dir(&root).unwrap();
 
         let result = run_cli(Cli {
             command: Commands::Migrate {
@@ -1653,8 +1737,7 @@ mod tests {
         })
         .await;
 
-        let _old_cwd = env::current_dir().unwrap();
-        env::set_current_dir(_old_cwd).unwrap();
+        env::set_current_dir(old_cwd).unwrap();
         result.unwrap();
 
         let files = fs::read_dir(root.join("migrations"))
@@ -1670,12 +1753,9 @@ mod tests {
         let root = make_temp_dir();
         fs::create_dir_all(root.join("migrations")).unwrap();
 
-        {
-            let _lock = CWD_LOCK.lock().unwrap();
-            let _old_cwd = env::current_dir().unwrap();
-            env::set_current_dir(&root).unwrap();
-            drop(_lock);
-        }
+        let _lock = CWD_LOCK.lock().unwrap();
+        let old_cwd = env::current_dir().unwrap();
+        env::set_current_dir(&root).unwrap();
 
         let db_url = sqlite_test_url(&root);
         let result = run_cli(Cli {
@@ -1688,8 +1768,7 @@ mod tests {
         })
         .await;
 
-        let _old_cwd = env::current_dir().unwrap();
-        env::set_current_dir(_old_cwd).unwrap();
+        env::set_current_dir(old_cwd).unwrap();
         result.unwrap();
 
         let _ = fs::remove_dir_all(&root);
