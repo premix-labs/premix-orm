@@ -207,6 +207,220 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
     let has_version = field_names.contains(&"version".to_string());
     let has_soft_delete = field_names.contains(&"deleted_at".to_string());
 
+    let save_update_block = if has_version {
+        quote! {
+            if self.id != 0 {
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let ver_p = <DB as premix_orm::SqlDialect>::placeholder(2 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 64);
+                    use ::std::fmt::Write;
+                    let _ = write!(
+                        sql,
+                        "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
+                        table_name,
+                        set_clause,
+                        id_p,
+                        ver_p
+                    );
+                    sql
+                });
+
+                premix_orm::tracing::debug!(
+                    operation = "update",
+                    table = table_name,
+                    sql = %sql,
+                    "premix query"
+                );
+
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
+                    #( .bind(&self.#field_idents) )*
+                    .bind(&self.id)
+                    .bind(&self.version);
+
+                let result = executor.execute(query).await?;
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) == 0 {
+                    static EXISTS_SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                    let exists_sql = EXISTS_SQL.get_or_init(|| {
+                        let exists_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                        let mut exists_sql = String::with_capacity(table_name.len() + 32);
+                        use ::std::fmt::Write;
+                        let _ = write!(exists_sql, "SELECT id FROM {} WHERE id = {}", table_name, exists_p);
+                        exists_sql
+                    });
+                    let exists_query =
+                        premix_orm::sqlx::query_as::<DB, (i32,)>(exists_sql)
+                            .persistent(true)
+                            .bind(&self.id);
+                    let exists = executor.fetch_optional(exists_query).await?;
+                    if exists.is_some() {
+                        return Err(premix_orm::sqlx::Error::Protocol(
+                            "premix save failed: version conflict".into(),
+                        ));
+                    }
+                } else {
+                    self.version += 1;
+                    self.after_save().await?;
+                    return Ok(());
+                }
+            }
+        }
+    } else {
+        quote! {
+            if self.id != 0 {
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 32);
+                    use ::std::fmt::Write;
+                    let _ = write!(sql, "UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
+                    sql
+                });
+
+                premix_orm::tracing::debug!(
+                    operation = "update",
+                    table = table_name,
+                    sql = %sql,
+                    "premix query"
+                );
+
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
+                    #( .bind(&self.#field_idents) )*
+                    .bind(&self.id);
+
+                let result = executor.execute(query).await?;
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) > 0 {
+                    self.after_save().await?;
+                    return Ok(());
+                }
+            }
+        }
+    };
+
+    let save_fast_update_block = if has_version {
+        quote! {
+            if self.id != 0 {
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let ver_p = <DB as premix_orm::SqlDialect>::placeholder(2 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 64);
+                    use ::std::fmt::Write;
+                    let _ = write!(
+                        sql,
+                        "UPDATE {} SET {}, version = version + 1 WHERE id = {} AND version = {}",
+                        table_name,
+                        set_clause,
+                        id_p,
+                        ver_p
+                    );
+                    sql
+                });
+
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
+                    #( .bind(&self.#field_idents) )*
+                    .bind(&self.id)
+                    .bind(&self.version);
+
+                let result = executor.execute(query).await?;
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) == 0 {
+                    static EXISTS_SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                    let exists_sql = EXISTS_SQL.get_or_init(|| {
+                        let exists_p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                        let mut exists_sql = String::with_capacity(table_name.len() + 32);
+                        use ::std::fmt::Write;
+                        let _ = write!(exists_sql, "SELECT id FROM {} WHERE id = {}", table_name, exists_p);
+                        exists_sql
+                    });
+                    let exists_query =
+                        premix_orm::sqlx::query_as::<DB, (i32,)>(exists_sql)
+                            .persistent(true)
+                            .bind(&self.id);
+                    let exists = executor.fetch_optional(exists_query).await?;
+                    if exists.is_some() {
+                        return Err(premix_orm::sqlx::Error::Protocol(
+                            "premix save failed: version conflict".into(),
+                        ));
+                    }
+                } else {
+                    self.version += 1;
+                    return Ok(());
+                }
+            }
+        }
+    } else {
+        quote! {
+            if self.id != 0 {
+                let table_name = Self::table_name();
+                static SQL: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
+                let sql = SQL.get_or_init(|| {
+                    let mut set_clause = String::with_capacity(#field_idents_len * 8);
+                    let mut i = 1usize;
+                    #(
+                        if i > 1 {
+                            set_clause.push_str(", ");
+                        }
+                        set_clause.push_str(#field_names);
+                        set_clause.push_str(" = ");
+                        set_clause.push_str(&<DB as premix_orm::SqlDialect>::placeholder(i));
+                        i += 1;
+                    )*
+                    let id_p = <DB as premix_orm::SqlDialect>::placeholder(1 + #field_idents_len);
+                    let mut sql = String::with_capacity(set_clause.len() + table_name.len() + 32);
+                    use ::std::fmt::Write;
+                    let _ = write!(sql, "UPDATE {} SET {} WHERE id = {}", table_name, set_clause, id_p);
+                    sql
+                });
+
+                let mut query = premix_orm::sqlx::query::<DB>(sql).persistent(true)
+                    #( .bind(&self.#field_idents) )*
+                    .bind(&self.id);
+
+                let result = executor.execute(query).await?;
+                if <DB as premix_orm::SqlDialect>::rows_affected(&result) > 0 {
+                    return Ok(());
+                }
+            }
+        }
+    };
+
     let update_impl = if has_version {
         quote! {
             fn update<'a, E>(
@@ -796,26 +1010,42 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 use premix_orm::ModelHooks;
                 self.before_save().await?;
 
+                #save_update_block
+
                 // CONSTANT column lists to avoid runtime joining/allocation
                 // We use head/tail pattern to insert ", " separator without trailing comma
                 const ALL_COLUMNS_LIST: &str = concat!(#all_cols_head, #( ", ", #all_cols_tail ),*);
                 const NO_ID_COLUMNS_LIST: &str = concat!(#no_id_cols_head, #( ", ", #no_id_cols_tail ),*);
 
-                let column_list: &str = if self.id == 0 { NO_ID_COLUMNS_LIST } else { ALL_COLUMNS_LIST };
-
-                // We still need to calculate placeholders at runtime because they depend on the count and DB dialect
-                let count = if self.id == 0 { #field_names_no_id_len } else { #field_idents_len };
-                let placeholders = premix_orm::cached_placeholders::<DB>(count);
-
                 let supports_returning = <DB as premix_orm::SqlDialect>::supports_returning();
                 if supports_returning {
-                    // Optimized format usage
-                    let sql = format!(
-                        "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
-                        #table_name,
-                        column_list,
-                        placeholders
-                    );
+                    let sql = if self.id == 0 {
+                        static INSERT_NO_ID_RETURNING_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_NO_ID_RETURNING_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_names_no_id_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
+                                #table_name,
+                                NO_ID_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    } else {
+                        static INSERT_WITH_ID_RETURNING_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_WITH_ID_RETURNING_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_idents_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
+                                #table_name,
+                                ALL_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    };
 
                     premix_orm::tracing::debug!(
                         operation = "insert",
@@ -824,7 +1054,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                         "premix query"
                     );
 
-                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(&sql)
+                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(sql.as_str())
                         .persistent(true);
                     #(
                         if #field_names != "id" {
@@ -838,12 +1068,33 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                         self.id = id;
                     }
                 } else {
-                    let sql = format!(
-                        "INSERT INTO {} ({}) VALUES ({})",
-                        #table_name,
-                        column_list,
-                        placeholders
-                    );
+                    let sql = if self.id == 0 {
+                        static INSERT_NO_ID_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_NO_ID_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_names_no_id_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({})",
+                                #table_name,
+                                NO_ID_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    } else {
+                        static INSERT_WITH_ID_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_WITH_ID_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_idents_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({})",
+                                #table_name,
+                                ALL_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    };
 
                     premix_orm::tracing::debug!(
                         operation = "insert",
@@ -852,7 +1103,7 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                         "premix query"
                     );
 
-                    let mut query = premix_orm::sqlx::query::<DB>(&sql).persistent(true);
+                    let mut query = premix_orm::sqlx::query::<DB>(sql.as_str()).persistent(true);
                     #(
                         if #field_names != "id" {
                             query = query.bind(&self.#field_idents);
@@ -884,27 +1135,44 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                 async move {
                 let mut executor = executor.into_executor();
 
+                #save_fast_update_block
+
                 // CONSTANT column lists to avoid runtime joining/allocation
                 // We use head/tail pattern to insert ", " separator without trailing comma
                 const ALL_COLUMNS_LIST: &str = concat!(#all_cols_head, #( ", ", #all_cols_tail ),*);
                 const NO_ID_COLUMNS_LIST: &str = concat!(#no_id_cols_head, #( ", ", #no_id_cols_tail ),*);
 
-                let column_list: &str = if self.id == 0 { NO_ID_COLUMNS_LIST } else { ALL_COLUMNS_LIST };
-
-                // We still need to calculate placeholders at runtime because they depend on the count and DB dialect
-                let count = if self.id == 0 { #field_names_no_id_len } else { #field_idents_len };
-                let placeholders = premix_orm::cached_placeholders::<DB>(count);
-
                 let supports_returning = <DB as premix_orm::SqlDialect>::supports_returning();
                 if supports_returning {
-                    let sql = format!(
-                        "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
-                        #table_name,
-                        column_list,
-                        placeholders
-                    );
+                    let sql = if self.id == 0 {
+                        static INSERT_NO_ID_RETURNING_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_NO_ID_RETURNING_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_names_no_id_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
+                                #table_name,
+                                NO_ID_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    } else {
+                        static INSERT_WITH_ID_RETURNING_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_WITH_ID_RETURNING_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_idents_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
+                                #table_name,
+                                ALL_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    };
 
-                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(&sql)
+                    let mut query = premix_orm::sqlx::query_as::<DB, (i32,)>(sql.as_str())
                         .persistent(true);
                     #(
                         if #field_names != "id" {
@@ -918,14 +1186,35 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
                         self.id = id;
                     }
                 } else {
-                    let sql = format!(
-                        "INSERT INTO {} ({}) VALUES ({})",
-                        #table_name,
-                        column_list,
-                        placeholders
-                    );
+                    let sql = if self.id == 0 {
+                        static INSERT_NO_ID_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_NO_ID_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_names_no_id_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({})",
+                                #table_name,
+                                NO_ID_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    } else {
+                        static INSERT_WITH_ID_SQL: std::sync::OnceLock<String> =
+                            std::sync::OnceLock::new();
+                        INSERT_WITH_ID_SQL.get_or_init(|| {
+                            let placeholders =
+                                premix_orm::cached_placeholders::<DB>(#field_idents_len);
+                            format!(
+                                "INSERT INTO {} ({}) VALUES ({})",
+                                #table_name,
+                                ALL_COLUMNS_LIST,
+                                placeholders
+                            )
+                        })
+                    };
 
-                    let mut query = premix_orm::sqlx::query::<DB>(&sql).persistent(true);
+                    let mut query = premix_orm::sqlx::query::<DB>(sql.as_str()).persistent(true);
                     #(
                         if #field_names != "id" {
                             query = query.bind(&self.#field_idents);

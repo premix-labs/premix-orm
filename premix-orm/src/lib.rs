@@ -92,7 +92,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! premix-orm = "1.0.7-alpha"
+//! premix-orm = "1.0.8-alpha"
 //! ```
 //!
 //! ## Book
@@ -100,6 +100,7 @@
 //! A longer-form guide lives in `orm-book/` at the repository root. It covers
 //! models, queries, relations, migrations, transactions, and limitations.
 
+pub use premix_core::schema_models;
 pub use premix_core::*;
 pub use premix_macros::Model;
 /// Compile-time query macro for true Zero-Overhead SQL generation.
@@ -132,4 +133,5 @@ pub mod prelude {
 
     pub use crate::Model; // The macro
     pub use crate::premix_query; // Zero-overhead compile-time query macro
+    pub use crate::schema_models;
 }

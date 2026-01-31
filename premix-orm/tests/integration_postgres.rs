@@ -17,7 +17,7 @@ async fn postgres_crud_smoke() {
         Some(pool) => pool,
         None => return,
     };
-    let table = PgUser::table_name();
+    let table = <PgUser as Model<sqlx::Postgres>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS \"{}\"", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
 
@@ -55,7 +55,7 @@ async fn postgres_filters_limit_offset_prepared() {
         Some(pool) => pool,
         None => return,
     };
-    let table = PgUser::table_name();
+    let table = <PgUser as Model<sqlx::Postgres>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS \"{}\"", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::Postgres, PgUser>(&pool)
@@ -95,7 +95,7 @@ async fn postgres_raw_filter_requires_allow_unsafe() {
         Some(pool) => pool,
         None => return,
     };
-    let table = PgUser::table_name();
+    let table = <PgUser as Model<sqlx::Postgres>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS \"{}\"", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::Postgres, PgUser>(&pool)
@@ -141,7 +141,7 @@ async fn postgres_stream_api() {
         Some(pool) => pool,
         None => return,
     };
-    let table = PgUser::table_name();
+    let table = <PgUser as Model<sqlx::Postgres>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS \"{}\"", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::Postgres, PgUser>(&pool)
@@ -171,7 +171,7 @@ async fn postgres_filter_null_like_in() {
         Some(pool) => pool,
         None => return,
     };
-    let table = PgUser::table_name();
+    let table = <PgUser as Model<sqlx::Postgres>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS \"{}\"", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::Postgres, PgUser>(&pool)
@@ -208,7 +208,7 @@ async fn postgres_transaction_rolls_back() {
         Some(pool) => pool,
         None => return,
     };
-    let table = PgUser::table_name();
+    let table = <PgUser as Model<sqlx::Postgres>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS \"{}\"", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::Postgres, PgUser>(&pool)
@@ -217,14 +217,17 @@ async fn postgres_transaction_rolls_back() {
 
     let mut conn = pool.acquire().await.expect("acquire");
     let conn = &mut *conn;
-    sqlx::query("BEGIN").execute(conn).await.expect("begin");
+    sqlx::query("BEGIN")
+        .execute(&mut *conn)
+        .await
+        .expect("begin");
     let mut user = PgUser {
         id: 0,
         name: "Tx".to_string(),
     };
-    user.save(conn).await.expect("save");
+    user.save(&mut *conn).await.expect("save");
     sqlx::query("ROLLBACK")
-        .execute(conn)
+        .execute(&mut *conn)
         .await
         .expect("rollback");
 

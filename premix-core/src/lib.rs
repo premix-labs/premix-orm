@@ -34,6 +34,9 @@ pub mod executor;
 /// Database migration engine.
 pub mod migrator;
 pub use migrator::{Migration, Migrator};
+/// Premix error types and helpers.
+pub mod error;
+pub use error::{PremixError, PremixResult, map_sqlx_error};
 /// Metrics and monitoring.
 #[cfg(feature = "metrics")]
 pub mod metrics;
@@ -100,12 +103,14 @@ pub mod prelude {
     pub use crate::Premix;
     pub use crate::build_placeholders;
     pub use crate::dialect::SqlDialect;
+    pub use crate::error::{PremixError, PremixResult, map_sqlx_error};
     pub use crate::executor::{Executor, IntoExecutor};
     pub use crate::migrator::{Migration, Migrator};
     pub use crate::model::{
-        FastRow, Model, ModelHooks, ModelValidation, UpdateResult, ValidationError,
+        FastRow, Model, ModelHooks, ModelResultExt, ModelValidation, UpdateResult, ValidationError,
     };
     pub use crate::query::QueryBuilder;
     pub use crate::schema::ModelSchema;
+    pub use crate::schema_models;
     pub use crate::sql_cache::{cached_placeholders, cached_placeholders_from};
 }

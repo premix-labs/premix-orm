@@ -1,6 +1,6 @@
 [package]
 name = "premix-core"
-version = "1.0.7-alpha"
+version = "1.0.8-alpha"
 edition = "2024"
 description = "A Zero-Overhead, Type-Safe ORM for Rust that runs optimized SQL."
 license = "MIT"
@@ -29,6 +29,7 @@ sqlx = { version = "0.8.6", features = [
     "macros",        # เปิดใช้งาน sqlx-macros สำหรับ query! (ถ้าต้องการใช้)
     "chrono",        # สำหรับ DateTime support ใน sqlx
     "uuid",          # สำหรับ UUID support ใน sqlx
+    "json",          # สำหรับ JSON support ใน sqlx
 ], default-features = false }
 
 tracing = "0.1.44"                                                  # ระบบ Logging แบบโครงสร้าง (Structured Logging)

@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(feature = "mysql")]
+use sqlx::MySqlPool;
 #[cfg(feature = "postgres")]
 use sqlx::PgPool;
 #[cfg(feature = "sqlite")]
@@ -363,6 +365,76 @@ pub async fn introspect_postgres_schema(pool: &PgPool) -> Result<Vec<SchemaTable
     Ok(tables)
 }
 
+/// Introspects the schema of a MySQL database.
+#[cfg(feature = "mysql")]
+pub async fn introspect_mysql_schema(pool: &MySqlPool) -> Result<Vec<SchemaTable>, sqlx::Error> {
+    let table_names: Vec<String> = sqlx::query_scalar(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' AND table_name != '_premix_migrations' ORDER BY table_name",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut tables = Vec::new();
+    for name in table_names {
+        let pk_cols: Vec<String> = sqlx::query_scalar(
+            "SELECT k.column_name
+             FROM information_schema.table_constraints tc
+             JOIN information_schema.key_column_usage k
+               ON tc.constraint_name = k.constraint_name
+              AND tc.table_schema = k.table_schema
+              AND tc.table_name = k.table_name
+             WHERE tc.constraint_type = 'PRIMARY KEY'
+               AND tc.table_schema = DATABASE()
+               AND tc.table_name = ?
+             ORDER BY k.ordinal_position",
+        )
+        .bind(&name)
+        .fetch_all(pool)
+        .await?;
+        let pk_set: BTreeSet<String> = pk_cols.into_iter().collect();
+
+        let rows: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT column_name, column_type, is_nullable
+             FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = ?
+             ORDER BY ordinal_position",
+        )
+        .bind(&name)
+        .fetch_all(pool)
+        .await?;
+
+        if rows.is_empty() {
+            continue;
+        }
+
+        let columns = rows
+            .into_iter()
+            .map(|(col_name, col_type, is_nullable)| {
+                let is_pk = pk_set.contains(&col_name);
+                SchemaColumn {
+                    name: col_name,
+                    sql_type: col_type,
+                    nullable: !is_pk && is_nullable.eq_ignore_ascii_case("YES"),
+                    primary_key: is_pk,
+                }
+            })
+            .collect();
+
+        let indexes = introspect_mysql_indexes(pool, &name).await?;
+        let foreign_keys = introspect_mysql_foreign_keys(pool, &name).await?;
+
+        tables.push(SchemaTable {
+            name,
+            columns,
+            indexes,
+            foreign_keys,
+            create_sql: None,
+        });
+    }
+
+    Ok(tables)
+}
+
 /// Compares the actual SQLite schema with an expected list of tables.
 #[cfg(feature = "sqlite")]
 pub async fn diff_sqlite_schema(
@@ -380,6 +452,16 @@ pub async fn diff_postgres_schema(
     expected: &[SchemaTable],
 ) -> Result<SchemaDiff, sqlx::Error> {
     let actual = introspect_postgres_schema(pool).await?;
+    Ok(diff_schema(expected, &actual))
+}
+
+/// Compares the actual MySQL schema with an expected list of tables.
+#[cfg(feature = "mysql")]
+pub async fn diff_mysql_schema(
+    pool: &MySqlPool,
+    expected: &[SchemaTable],
+) -> Result<SchemaDiff, sqlx::Error> {
+    let actual = introspect_mysql_schema(pool).await?;
     Ok(diff_schema(expected, &actual))
 }
 
@@ -805,6 +887,136 @@ pub fn postgres_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Ve
     statements
 }
 
+#[cfg(feature = "mysql")]
+/// Generates MySQL migration SQL for a given schema difference.
+pub fn mysql_migration_sql(expected: &[SchemaTable], diff: &SchemaDiff) -> Vec<String> {
+    let expected_map: BTreeMap<String, &SchemaTable> =
+        expected.iter().map(|t| (t.name.clone(), t)).collect();
+    let mut statements = Vec::new();
+
+    for table in &diff.missing_tables {
+        if let Some(schema) = expected_map.get(table) {
+            statements.push(schema.to_create_sql());
+            for index in &schema.indexes {
+                statements.push(mysql_create_index_sql(&schema.name, index));
+            }
+        } else {
+            statements.push(format!("-- Missing schema for table {}", table));
+        }
+    }
+
+    let mut missing_by_table: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for col in &diff.missing_columns {
+        missing_by_table
+            .entry(col.table.clone())
+            .or_default()
+            .insert(col.column.clone());
+    }
+
+    for (table, columns) in missing_by_table {
+        let Some(schema) = expected_map.get(&table) else {
+            continue;
+        };
+        for col_name in columns {
+            let Some(col) = schema.column(&col_name) else {
+                continue;
+            };
+
+            let potential_rename = diff.extra_columns.iter().find(|e| {
+                e.table == table && e.sql_type.as_deref() == Some(&col.normalized_type())
+            });
+
+            if let Some(old) = potential_rename {
+                statements.push(format!(
+                    "-- SUGESTION: Potential rename from column '{}' to '{}'?",
+                    old.column, col.name
+                ));
+            }
+
+            if col.primary_key {
+                statements.push(format!(
+                    "-- TODO: add primary key column {}.{} manually",
+                    table, col_name
+                ));
+                continue;
+            }
+
+            if !col.nullable {
+                statements.push(format!(
+                    "-- WARNING: Adding NOT NULL column '{}.{}' without a default value will fail if table contains rows.",
+                    table, col.name
+                ));
+            }
+
+            let mut stmt = format!(
+                "ALTER TABLE {} ADD COLUMN {} {}",
+                table, col.name, col.sql_type
+            );
+            if !col.nullable {
+                stmt.push_str(" NOT NULL");
+            }
+            statements.push(stmt);
+        }
+    }
+
+    for mismatch in &diff.type_mismatches {
+        statements.push(format!(
+            "-- TODO: column type mismatch {}.{} (expected {}, actual {})",
+            mismatch.table, mismatch.column, mismatch.expected, mismatch.actual
+        ));
+    }
+    for mismatch in &diff.nullability_mismatches {
+        statements.push(format!(
+            "-- TODO: column nullability mismatch {}.{} (expected nullable {}, actual nullable {})",
+            mismatch.table, mismatch.column, mismatch.expected_nullable, mismatch.actual_nullable
+        ));
+    }
+    for mismatch in &diff.primary_key_mismatches {
+        statements.push(format!(
+            "-- TODO: column primary key mismatch {}.{} (expected pk {}, actual pk {})",
+            mismatch.table,
+            mismatch.column,
+            mismatch.expected_primary_key,
+            mismatch.actual_primary_key
+        ));
+    }
+    for (table, index) in &diff.missing_indexes {
+        statements.push(mysql_create_index_sql(table, index));
+    }
+    for (table, index) in &diff.extra_indexes {
+        statements.push(format!(
+            "-- TODO: extra index {}.{} ({})",
+            table,
+            index.name,
+            index.columns.join(", ")
+        ));
+    }
+    for (table, fk) in &diff.missing_foreign_keys {
+        let fk_name = format!("fk_{}_{}", table, fk.column);
+        statements.push(format!(
+            "ALTER TABLE {} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {}({})",
+            table, fk_name, fk.column, fk.ref_table, fk.ref_column
+        ));
+    }
+    for (table, fk) in &diff.extra_foreign_keys {
+        statements.push(format!(
+            "-- TODO: extra foreign key {}.{} -> {}({})",
+            table, fk.column, fk.ref_table, fk.ref_column
+        ));
+    }
+    for extra in &diff.extra_columns {
+        statements.push(format!(
+            "-- TODO: extra column {}.{} not in models",
+            extra.table, extra.column
+        ));
+    }
+    for table in &diff.extra_tables {
+        statements.push(format!("-- TODO: extra table {} not in models", table));
+    }
+
+    statements
+}
+
 fn index_key(index: &SchemaIndex) -> (String, String, bool) {
     let name = index.name.clone();
     let cols = index.columns.join(",");
@@ -908,6 +1120,23 @@ fn postgres_create_index_sql(table: &str, index: &SchemaIndex) -> String {
     )
 }
 
+#[cfg(feature = "mysql")]
+fn mysql_create_index_sql(table: &str, index: &SchemaIndex) -> String {
+    let unique = if index.unique { "UNIQUE " } else { "" };
+    let name = if index.name.is_empty() {
+        format!("idx_{}_{}", table, index.columns.join("_"))
+    } else {
+        index.name.clone()
+    };
+    format!(
+        "CREATE {}INDEX {} ON {} ({})",
+        unique,
+        name,
+        table,
+        index.columns.join(", ")
+    )
+}
+
 #[cfg(feature = "postgres")]
 async fn introspect_postgres_indexes(
     pool: &PgPool,
@@ -955,6 +1184,72 @@ async fn introspect_postgres_foreign_keys(
            AND tc.table_schema = 'public'
            AND tc.table_name = $1
          ORDER BY kcu.ordinal_position",
+    )
+    .bind(table)
+    .fetch_all(pool)
+    .await?;
+
+    let fks = rows
+        .into_iter()
+        .map(|(column, ref_table, ref_column)| SchemaForeignKey {
+            column,
+            ref_table,
+            ref_column,
+        })
+        .collect();
+
+    Ok(fks)
+}
+
+#[cfg(feature = "mysql")]
+async fn introspect_mysql_indexes(
+    pool: &MySqlPool,
+    table: &str,
+) -> Result<Vec<SchemaIndex>, sqlx::Error> {
+    let rows: Vec<(String, i64, Option<String>)> = sqlx::query_as(
+        "SELECT index_name, non_unique, GROUP_CONCAT(column_name ORDER BY seq_in_index) AS columns
+         FROM information_schema.statistics
+         WHERE table_schema = DATABASE() AND table_name = ? AND index_name != 'PRIMARY'
+         GROUP BY index_name, non_unique
+         ORDER BY index_name",
+    )
+    .bind(table)
+    .fetch_all(pool)
+    .await?;
+
+    let mut indexes = Vec::new();
+    for (name, non_unique, columns) in rows {
+        let columns = columns
+            .unwrap_or_default()
+            .split(',')
+            .filter(|col| !col.is_empty())
+            .map(|col| col.to_string())
+            .collect::<Vec<_>>();
+        if columns.is_empty() {
+            continue;
+        }
+        indexes.push(SchemaIndex {
+            name,
+            columns,
+            unique: non_unique == 0,
+        });
+    }
+
+    Ok(indexes)
+}
+
+#[cfg(feature = "mysql")]
+async fn introspect_mysql_foreign_keys(
+    pool: &MySqlPool,
+    table: &str,
+) -> Result<Vec<SchemaForeignKey>, sqlx::Error> {
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT column_name, referenced_table_name, referenced_column_name
+         FROM information_schema.key_column_usage
+         WHERE table_schema = DATABASE()
+           AND table_name = ?
+           AND referenced_table_name IS NOT NULL
+         ORDER BY ordinal_position",
     )
     .bind(table)
     .fetch_all(pool)

@@ -44,9 +44,12 @@ fn generate_has_many(parent: &Ident, child: &Ident) -> TokenStream {
             i32: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB>,
         {
             let mut executor = executor.into_executor();
-            let p = <DB as premix_orm::SqlDialect>::placeholder(1);
-            let sql = format!("SELECT * FROM {} WHERE {} = {}", #child_table, #fk, p);
-            let query = premix_orm::sqlx::query_as::<DB, #child>(&sql)
+            static SQL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+            let sql = SQL.get_or_init(|| {
+                let p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                format!("SELECT * FROM {} WHERE {} = {}", #child_table, #fk, p)
+            });
+            let query = premix_orm::sqlx::query_as::<DB, #child>(sql.as_str())
                 .persistent(true)
                 .bind(self.id);
             executor.fetch_all(query).await
@@ -71,9 +74,12 @@ fn generate_belongs_to(child: &Ident, parent: &Ident) -> TokenStream {
             i32: premix_orm::sqlx::Type<DB> + for<'q> premix_orm::sqlx::Encode<'q, DB>,
         {
             let mut executor = executor.into_executor();
-            let p = <DB as premix_orm::SqlDialect>::placeholder(1);
-            let sql = format!("SELECT * FROM {} WHERE id = {}", #parent_table, p);
-            let query = premix_orm::sqlx::query_as::<DB, #parent>(&sql)
+            static SQL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+            let sql = SQL.get_or_init(|| {
+                let p = <DB as premix_orm::SqlDialect>::placeholder(1);
+                format!("SELECT * FROM {} WHERE id = {}", #parent_table, p)
+            });
+            let query = premix_orm::sqlx::query_as::<DB, #parent>(sql.as_str())
                 .persistent(true)
                 .bind(self.#fk);
             executor.fetch_optional(query).await

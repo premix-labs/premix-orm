@@ -1,4 +1,5 @@
 use crate::dialect::SqlDialect;
+use crate::error::{PremixError, PremixResult};
 use crate::executor::Executor;
 use crate::executor::IntoExecutor;
 use crate::query::QueryBuilder;
@@ -257,5 +258,64 @@ where
     /// Creates a new [`QueryBuilder`] using an active database connection.
     fn find_in_tx(conn: &mut DB::Connection) -> QueryBuilder<'_, Self, DB> {
         QueryBuilder::new(Executor::Conn(conn))
+    }
+}
+
+/// Convenience helpers that map sqlx errors into `PremixError`.
+pub trait ModelResultExt<DB: Database>: Model<DB>
+where
+    DB: SqlDialect,
+    for<'r> Self: FromRow<'r, DB::Row>,
+{
+    /// Save the model and return `PremixError` on failure.
+    fn save_result<'a, E>(&'a mut self, executor: E) -> impl Future<Output = PremixResult<()>>
+    where
+        E: IntoExecutor<'a, DB = DB>;
+
+    /// Update the model and return `PremixError` on failure.
+    fn update_result<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = PremixResult<UpdateResult>>
+    where
+        E: IntoExecutor<'a, DB = DB>;
+
+    /// Delete the model and return `PremixError` on failure.
+    fn delete_result<'a, E>(&'a mut self, executor: E) -> impl Future<Output = PremixResult<()>>
+    where
+        E: IntoExecutor<'a, DB = DB>;
+}
+
+impl<T, DB> ModelResultExt<DB> for T
+where
+    DB: SqlDialect,
+    T: Model<DB>,
+    for<'r> T: FromRow<'r, DB::Row>,
+{
+    #[allow(clippy::manual_async_fn)]
+    fn save_result<'a, E>(&'a mut self, executor: E) -> impl Future<Output = PremixResult<()>>
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        async move { self.save(executor).await.map_err(PremixError::from) }
+    }
+
+    #[allow(clippy::manual_async_fn)]
+    fn update_result<'a, E>(
+        &'a mut self,
+        executor: E,
+    ) -> impl Future<Output = PremixResult<UpdateResult>>
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        async move { self.update(executor).await.map_err(PremixError::from) }
+    }
+
+    #[allow(clippy::manual_async_fn)]
+    fn delete_result<'a, E>(&'a mut self, executor: E) -> impl Future<Output = PremixResult<()>>
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        async move { self.delete(executor).await.map_err(PremixError::from) }
     }
 }

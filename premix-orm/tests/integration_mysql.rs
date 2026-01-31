@@ -17,7 +17,7 @@ async fn mysql_crud_smoke() {
         Some(pool) => pool,
         None => return,
     };
-    let table = MyUser::table_name();
+    let table = <MyUser as Model<sqlx::MySql>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS `{}`", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
 
@@ -55,7 +55,7 @@ async fn mysql_filters_limit_offset_prepared() {
         Some(pool) => pool,
         None => return,
     };
-    let table = MyUser::table_name();
+    let table = <MyUser as Model<sqlx::MySql>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS `{}`", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::MySql, MyUser>(&pool)
@@ -95,7 +95,7 @@ async fn mysql_raw_filter_requires_allow_unsafe() {
         Some(pool) => pool,
         None => return,
     };
-    let table = MyUser::table_name();
+    let table = <MyUser as Model<sqlx::MySql>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS `{}`", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::MySql, MyUser>(&pool)
@@ -141,7 +141,7 @@ async fn mysql_stream_api() {
         Some(pool) => pool,
         None => return,
     };
-    let table = MyUser::table_name();
+    let table = <MyUser as Model<sqlx::MySql>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS `{}`", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::MySql, MyUser>(&pool)
@@ -171,7 +171,7 @@ async fn mysql_filter_like_in() {
         Some(pool) => pool,
         None => return,
     };
-    let table = MyUser::table_name();
+    let table = <MyUser as Model<sqlx::MySql>>::table_name();
     let drop_sql = format!("DROP TABLE IF EXISTS `{}`", table);
     sqlx::query(&drop_sql).execute(&pool).await.ok();
     Premix::sync::<sqlx::MySql, MyUser>(&pool)

@@ -15,6 +15,9 @@ pub enum BindValue {
     Bool(bool),
     Uuid(uuid::Uuid),
     DateTime(chrono::DateTime<chrono::Utc>),
+    NaiveDateTime(chrono::NaiveDateTime),
+    NaiveDate(chrono::NaiveDate),
+    Json(serde_json::Value),
     Null,
 }
 
@@ -27,6 +30,9 @@ impl BindValue {
             BindValue::Bool(v) => v.to_string(),
             BindValue::Uuid(v) => v.to_string(),
             BindValue::DateTime(v) => v.to_rfc3339(),
+            BindValue::NaiveDateTime(v) => v.to_string(),
+            BindValue::NaiveDate(v) => v.to_string(),
+            BindValue::Json(v) => v.to_string(),
             BindValue::Null => "NULL".to_string(),
         }
     }
@@ -59,6 +65,9 @@ where
     bool: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     uuid::Uuid: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     chrono::DateTime<chrono::Utc>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::NaiveDateTime: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::NaiveDate: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    sqlx::types::Json<serde_json::Value>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     Option<String>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     match value {
@@ -68,6 +77,9 @@ where
         BindValue::Bool(v) => query.bind(v),
         BindValue::Uuid(v) => query.bind(v),
         BindValue::DateTime(v) => query.bind(v),
+        BindValue::NaiveDateTime(v) => query.bind(v),
+        BindValue::NaiveDate(v) => query.bind(v),
+        BindValue::Json(v) => query.bind(sqlx::types::Json(v)),
         BindValue::Null => query.bind(Option::<String>::None),
     }
 }
@@ -85,6 +97,9 @@ where
     bool: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     uuid::Uuid: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     chrono::DateTime<chrono::Utc>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::NaiveDateTime: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::NaiveDate: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    sqlx::types::Json<serde_json::Value>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     Option<String>: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     match value {
@@ -94,6 +109,9 @@ where
         BindValue::Bool(v) => query.bind(v),
         BindValue::Uuid(v) => query.bind(v),
         BindValue::DateTime(v) => query.bind(v),
+        BindValue::NaiveDateTime(v) => query.bind(v),
+        BindValue::NaiveDate(v) => query.bind(v),
+        BindValue::Json(v) => query.bind(sqlx::types::Json(v)),
         BindValue::Null => query.bind(Option::<String>::None),
     }
 }
@@ -182,6 +200,24 @@ impl From<uuid::Uuid> for BindValue {
 impl From<chrono::DateTime<chrono::Utc>> for BindValue {
     fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
         Self::DateTime(value)
+    }
+}
+
+impl From<chrono::NaiveDateTime> for BindValue {
+    fn from(value: chrono::NaiveDateTime) -> Self {
+        Self::NaiveDateTime(value)
+    }
+}
+
+impl From<chrono::NaiveDate> for BindValue {
+    fn from(value: chrono::NaiveDate) -> Self {
+        Self::NaiveDate(value)
+    }
+}
+
+impl From<serde_json::Value> for BindValue {
+    fn from(value: serde_json::Value) -> Self {
+        Self::Json(value)
     }
 }
 
@@ -583,7 +619,6 @@ where
     pub fn unsafe_fast(mut self) -> Self {
         self.fast_path = true;
         self.unsafe_fast = true;
-        self.allow_unsafe = true;
         self
     }
 
@@ -592,7 +627,6 @@ where
     pub fn ultra_fast(mut self) -> Self {
         self.fast_path = true;
         self.unsafe_fast = true;
-        self.allow_unsafe = true;
         self.ultra_fast = true;
         self
     }
@@ -776,6 +810,9 @@ where
     Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     uuid::Uuid: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::NaiveDateTime: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    chrono::NaiveDate: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    sqlx::types::Json<serde_json::Value>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
 {
     fn ensure_safe_filters(&self) -> Result<(), sqlx::Error> {
         if self.unsafe_fast {
@@ -931,6 +968,9 @@ where
         Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
         uuid::Uuid: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
         chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDateTime: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDate: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        sqlx::types::Json<serde_json::Value>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     {
         self.ensure_safe_filters()?;
         if self.filters.is_empty() && !self.allow_unsafe && !self.unsafe_fast {
@@ -984,10 +1024,8 @@ where
                 }
                 serde_json::Value::Bool(b) => query = query.bind(*b),
                 serde_json::Value::Null => query = query.bind(Option::<String>::None),
-                _ => {
-                    return Err(sqlx::Error::Protocol(
-                        "Unsupported type in bulk update".to_string(),
-                    ));
+                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                    query = query.bind(sqlx::types::Json(val.clone()));
                 }
             }
         }
@@ -1020,6 +1058,11 @@ where
         f64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
         bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
         Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        uuid::Uuid: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDateTime: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDate: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        sqlx::types::Json<serde_json::Value>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
     {
         self.update(values).await
     }
