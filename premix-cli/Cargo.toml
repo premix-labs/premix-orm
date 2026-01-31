@@ -1,6 +1,6 @@
 [package]
 name = "premix-cli"
-version = "1.0.7-alpha"
+version = "1.0.8-alpha"
 edition = "2024"
 description = "Command-line tool for Premix ORM (Migration management and more)."
 license = "MIT"
@@ -16,7 +16,7 @@ clap = { version = "4.5.23", features = [
 tokio = { version = "1.49.0", features = [
     "full",
 ] } # Runtime สำหรับการทำงานแบบ Async
-premix-core = { version = "=1.0.7-alpha", path = "../premix-core", default-features = false } # ดึง Logic หลักของ ORM มาใช้
+premix-core = { version = "=1.0.8-alpha", path = "../premix-core", default-features = false } # ดึง Logic หลักของ ORM มาใช้
 sqlx = { version = "0.8.6", features = [
     "runtime-tokio",
 ] } # สำหรับคุยกับ DB ตอนทำ Migration
@@ -26,6 +26,7 @@ syn = { version = "2.0.114", features = [
 quote = "1.0.43" # ใช้สร้างโค้ด Rust สำหรับฟีเจอร์ Scaffolding
 walkdir = "2.5.0" # สำหรับค้นหาไฟล์ SQL Migration ในโฟลเดอร์ต่างๆ
 chrono = "0.4" # จัดการเวลาสำหรับตั้งชื่อไฟล์ Migration (Timestamp)
+dotenvy = "0.15"
 
 [features]
 default = ["sqlite"]
