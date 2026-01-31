@@ -81,6 +81,11 @@ build_rs_cov.profraw
 orm-book/book/
 
 # ===================
+# Generated CLI Artifacts
+# ===================
+premix-cli/src/bin/
+
+# ===================
 # Benchmarks
 # ===================
 benchmarks/results/*
