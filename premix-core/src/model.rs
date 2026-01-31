@@ -3,6 +3,7 @@ use crate::error::{PremixError, PremixResult};
 use crate::executor::Executor;
 use crate::executor::IntoExecutor;
 use crate::query::QueryBuilder;
+use serde_json::Value;
 use sqlx::{Database, FromRow};
 use std::future::Future;
 
@@ -60,6 +61,36 @@ where
 {
     fn from_row(row: &'r DB::Row) -> Result<Self, sqlx::Error> {
         T::from_row_fast(row).map(|value| FastRow(value, std::marker::PhantomData))
+    }
+}
+
+/// Typed relation handle for eager loading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Relation {
+    name: &'static str,
+}
+
+impl Relation {
+    /// Creates a new relation handle from a static name.
+    pub const fn new(name: &'static str) -> Self {
+        Self { name }
+    }
+
+    /// Returns the relation name.
+    pub const fn name(&self) -> &'static str {
+        self.name
+    }
+}
+
+impl From<Relation> for String {
+    fn from(value: Relation) -> Self {
+        value.name.to_string()
+    }
+}
+
+impl From<&Relation> for String {
+    fn from(value: &Relation) -> Self {
+        value.name.to_string()
     }
 }
 
@@ -195,6 +226,16 @@ where
         &[]
     }
 
+    /// Returns the relation names available for eager loading.
+    fn relation_names() -> &'static [&'static str] {
+        &[]
+    }
+
+    /// Returns relations that should be eager-loaded by default.
+    fn default_includes() -> &'static [&'static str] {
+        &[]
+    }
+
     /// Finds a record by its Primary Key.
     fn find_by_id<'a, E>(
         executor: E,
@@ -247,6 +288,86 @@ where
         E: IntoExecutor<'a, DB = DB>,
     {
         QueryBuilder::new(executor.into_executor())
+    }
+
+    /// Fetches all records for this model.
+    fn all<'a, E>(executor: E) -> impl Future<Output = Result<Vec<Self>, sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+        for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+        for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
+        for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
+        DB::Connection: Send,
+        Self: Send,
+        String: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        i64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        f64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        uuid::Uuid: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDateTime: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDate: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        sqlx::types::Json<serde_json::Value>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    {
+        async move { Self::find(executor).all().await }
+    }
+
+    /// Finds a record by its primary key (alias for [`find_by_id`]).
+    fn find_one<'a, E>(
+        executor: E,
+        id: i32,
+    ) -> impl Future<Output = Result<Option<Self>, sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+    {
+        Self::find_by_id(executor, id)
+    }
+
+    /// Creates a new record and returns the saved instance.
+    fn create<E>(
+        executor: E,
+        mut instance: Self,
+    ) -> impl Future<Output = Result<Self, sqlx::Error>> + Send
+    where
+        for<'e> E: IntoExecutor<'e, DB = DB> + Send,
+    {
+        async move {
+            instance.save(executor).await?;
+            Ok(instance)
+        }
+    }
+
+    /// Applies a JSON patch update by primary key.
+    fn update_by_id<'a, E>(
+        executor: E,
+        id: i32,
+        json_patch: Value,
+    ) -> impl Future<Output = Result<u64, sqlx::Error>> + Send
+    where
+        E: IntoExecutor<'a, DB = DB>,
+        for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+        for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
+        for<'c> &'c str: sqlx::ColumnIndex<DB::Row>,
+        DB::Connection: Send,
+        Self: Send,
+        String: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        i64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        f64: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        bool: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        Option<String>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        uuid::Uuid: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::DateTime<chrono::Utc>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDateTime: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        chrono::NaiveDate: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        sqlx::types::Json<serde_json::Value>: for<'q> sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    {
+        async move {
+            Self::find(executor)
+                .filter_eq("id", id)
+                .update(json_patch)
+                .await
+        }
     }
 
     // Convenience helpers

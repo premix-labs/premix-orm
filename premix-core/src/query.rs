@@ -351,12 +351,17 @@ where
 {
     /// Creates a new `QueryBuilder` using the provided [`Executor`].
     pub fn new(executor: Executor<'a, DB>) -> Self {
+        let default_includes = T::default_includes();
+        let mut includes = SmallVec::with_capacity(default_includes.len().max(2));
+        for relation in default_includes {
+            includes.push((*relation).to_string());
+        }
         Self {
             executor,
             filters: Vec::with_capacity(4), // Pre-allocate for typical queries (1-4 filters)
             limit: None,
             offset: None,
-            includes: SmallVec::with_capacity(2), // Pre-allocate for typical queries (1-2 includes)
+            includes, // Include eager defaults
             include_deleted: false,
             allow_unsafe: false,
             has_raw_filter: false,

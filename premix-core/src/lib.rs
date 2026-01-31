@@ -42,7 +42,9 @@ pub use error::{PremixError, PremixResult, map_sqlx_error};
 pub mod metrics;
 /// Core traits and types for database models.
 pub mod model;
-pub use model::{FastRow, Model, ModelHooks, ModelValidation, UpdateResult, ValidationError};
+pub use model::{
+    FastRow, Model, ModelHooks, ModelValidation, Relation, UpdateResult, ValidationError,
+};
 /// Type-safe SQL query builder.
 pub mod query;
 pub use query::QueryBuilder;
@@ -107,7 +109,8 @@ pub mod prelude {
     pub use crate::executor::{Executor, IntoExecutor};
     pub use crate::migrator::{Migration, Migrator};
     pub use crate::model::{
-        FastRow, Model, ModelHooks, ModelResultExt, ModelValidation, UpdateResult, ValidationError,
+        FastRow, Model, ModelHooks, ModelResultExt, ModelValidation, Relation, UpdateResult,
+        ValidationError,
     };
     pub use crate::query::QueryBuilder;
     pub use crate::schema::ModelSchema;

@@ -172,6 +172,16 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
         })
         .collect();
 
+    let relation_meta = relations::collect_relation_metadata(input)?;
+    let relation_names: Vec<LitStr> = relation_meta
+        .iter()
+        .map(|meta| LitStr::new(&meta.relation_name, proc_macro2::Span::call_site()))
+        .collect();
+    let eager_relation_names: Vec<LitStr> = relation_meta
+        .iter()
+        .filter(|meta| meta.eager)
+        .map(|meta| LitStr::new(&meta.relation_name, proc_macro2::Span::call_site()))
+        .collect();
     let eager_load_body = relations::generate_eager_load_body(input)?;
     let (index_specs, foreign_key_specs) = collect_schema_specs(all_fields, &table_name)?;
     let index_tokens: Vec<_> = index_specs
@@ -978,6 +988,14 @@ fn generate_generic_impl(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
             fn sensitive_fields() -> &'static [&'static str] {
                 &[ #( #sensitive_field_literals ),* ]
+            }
+
+            fn relation_names() -> &'static [&'static str] {
+                &[ #( #relation_names ),* ]
+            }
+
+            fn default_includes() -> &'static [&'static str] {
+                &[ #( #eager_relation_names ),* ]
             }
 
             fn from_row_fast(row: &<DB as premix_orm::sqlx::Database>::Row) -> Result<Self, premix_orm::sqlx::Error>

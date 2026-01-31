@@ -48,7 +48,7 @@
 //!     id: i32,
 //!     name: String,
 //!
-//!     #[has_many(Post)]
+//!     #[has_many(Post, eager)]
 //!     #[premix(ignore)]
 //!     posts: Option<Vec<Post>>,
 //! }
@@ -62,7 +62,7 @@
 //! }
 //!
 //! # async fn example(pool: premix_orm::sqlx::SqlitePool) -> Result<(), sqlx::Error> {
-//! let _users = User::find_in_pool(&pool).include("posts").all().await?;
+//! let _users = User::find_in_pool(&pool).include(User::posts).all().await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -92,7 +92,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! premix-orm = "1.0.8-alpha"
+//! premix-orm = "1.0.9-alpha"
 //! ```
 //!
 //! ## Book

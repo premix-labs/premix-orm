@@ -1,30 +1,108 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use syn::DeriveInput;
+use syn::parse::{Parse, ParseStream};
+use syn::{DeriveInput, Token};
+
+struct RelationArgs {
+    model: Ident,
+    eager: bool,
+}
+
+impl Parse for RelationArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let model: Ident = input.parse()?;
+        let mut eager = false;
+        while !input.is_empty() {
+            input.parse::<Token![,]>()?;
+            if input.is_empty() {
+                break;
+            }
+            let flag: Ident = input.parse()?;
+            if flag == "eager" {
+                eager = true;
+            } else {
+                return Err(syn::Error::new_spanned(flag, "unsupported relation option"));
+            }
+        }
+        Ok(Self { model, eager })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RelationMeta {
+    pub relation_name: String,
+    pub eager: bool,
+}
 
 pub fn impl_relations(input: &DeriveInput) -> syn::Result<TokenStream> {
     let struct_name = &input.ident;
     let mut methods = TokenStream::new();
+    let mut relation_consts = TokenStream::new();
+    let reserved_names = belongs_to_method_names(&input.attrs);
 
     for attr in &input.attrs {
         if attr.path().is_ident("has_many") {
-            let child = attr.parse_args::<syn::Ident>()?;
-            methods.extend(generate_has_many(struct_name, &child));
+            let args = attr.parse_args::<RelationArgs>()?;
+            methods.extend(generate_has_many(struct_name, &args.model));
         } else if attr.path().is_ident("belongs_to") {
-            let parent = attr.parse_args::<syn::Ident>()?;
-            methods.extend(generate_belongs_to(struct_name, &parent));
+            let args = attr.parse_args::<RelationArgs>()?;
+            methods.extend(generate_belongs_to(struct_name, &args.model));
         }
     }
 
-    if !methods.is_empty() {
+    if let syn::Data::Struct(data) = &input.data
+        && let syn::Fields::Named(fields) = &data.fields
+    {
+        for field in &fields.named {
+            let field_name = field.ident.as_ref().unwrap();
+            for attr in &field.attrs {
+                if attr.path().is_ident("has_many") {
+                    let relation_name = field_name.to_string();
+                    relation_consts.extend(quote! {
+                        #[allow(non_upper_case_globals)]
+                        pub const #field_name: premix_orm::Relation =
+                            premix_orm::Relation::new(#relation_name);
+                    });
+                } else if attr.path().is_ident("belongs_to") {
+                    let relation_name = field_name.to_string();
+                    let const_ident = if reserved_names.contains(&relation_name) {
+                        format_ident!("{}_rel", field_name)
+                    } else {
+                        field_name.clone()
+                    };
+                    relation_consts.extend(quote! {
+                        #[allow(non_upper_case_globals)]
+                        pub const #const_ident: premix_orm::Relation =
+                            premix_orm::Relation::new(#relation_name);
+                    });
+                }
+            }
+        }
+    }
+
+    if !methods.is_empty() || !relation_consts.is_empty() {
         Ok(quote! {
             impl #struct_name {
+                #relation_consts
                 #methods
             }
         })
     } else {
         Ok(TokenStream::new())
     }
+}
+
+fn belongs_to_method_names(attrs: &[syn::Attribute]) -> Vec<String> {
+    let mut names = Vec::new();
+    for attr in attrs {
+        if !attr.path().is_ident("belongs_to") {
+            continue;
+        }
+        if let Ok(args) = attr.parse_args::<RelationArgs>() {
+            names.push(args.model.to_string().to_lowercase());
+        }
+    }
+    names
 }
 
 fn generate_has_many(parent: &Ident, child: &Ident) -> TokenStream {
@@ -90,6 +168,7 @@ fn generate_belongs_to(child: &Ident, parent: &Ident) -> TokenStream {
 pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream> {
     let parent_struct = &input.ident;
     let mut arms = TokenStream::new();
+    let mut relation_names: Vec<String> = Vec::new();
 
     if let syn::Data::Struct(data) = &input.data
         && let syn::Fields::Named(fields) = &data.fields
@@ -99,8 +178,10 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
 
             for attr in &field.attrs {
                 if attr.path().is_ident("has_many") {
-                    let child_model = attr.parse_args::<Ident>()?;
+                    let args = attr.parse_args::<RelationArgs>()?;
+                    let child_model = args.model;
                     let relation_name = field_name.as_ref().unwrap().to_string();
+                    relation_names.push(relation_name.clone());
 
                     let child_table = format!("{}s", child_model.to_string().to_lowercase());
                     let parent_fk_str = format!("{}_id", parent_struct.to_string().to_lowercase());
@@ -186,8 +267,10 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
                             },
                         });
                 } else if attr.path().is_ident("belongs_to") {
-                    let parent_model = attr.parse_args::<Ident>()?;
+                    let args = attr.parse_args::<RelationArgs>()?;
+                    let parent_model = args.model;
                     let relation_name = field_name.as_ref().unwrap().to_string();
+                    relation_names.push(relation_name.clone());
                     let parent_table = format!("{}s", parent_model.to_string().to_lowercase());
                     let fk_str = format!("{}_id", parent_model.to_string().to_lowercase());
                     let fk_ident = format_ident!("{}", fk_str);
@@ -271,15 +354,61 @@ pub fn generate_eager_load_body(input: &DeriveInput) -> syn::Result<TokenStream>
         }
     }
 
-    Ok(quote! {
-        match relation {
-            #arms
-            _ => {
-                premix_orm::tracing::warn!("premix relation '{}' not found", relation);
+    let relation_names = relation_names
+        .iter()
+        .map(|name| syn::LitStr::new(name, proc_macro2::Span::call_site()))
+        .collect::<Vec<_>>();
+
+    if arms.is_empty() {
+        Ok(quote! {
+            let available: &[&str] = &[#(#relation_names),*];
+            let joined = available.join(", ");
+            return Err(premix_orm::sqlx::Error::Protocol(format!(
+                "premix relation '{}' not found for {}. Available relations: {}",
+                relation,
+                stringify!(#parent_struct),
+                joined
+            )));
+        })
+    } else {
+        Ok(quote! {
+            match relation {
+                #arms
+                _ => {
+                    let available: &[&str] = &[#(#relation_names),*];
+                    let joined = available.join(", ");
+                    return Err(premix_orm::sqlx::Error::Protocol(format!(
+                        "premix relation '{}' not found for {}. Available relations: {}",
+                        relation,
+                        stringify!(#parent_struct),
+                        joined
+                    )));
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+pub fn collect_relation_metadata(input: &DeriveInput) -> syn::Result<Vec<RelationMeta>> {
+    let mut relations = Vec::new();
+    if let syn::Data::Struct(data) = &input.data
+        && let syn::Fields::Named(fields) = &data.fields
+    {
+        for field in &fields.named {
+            let field_ident = field.ident.as_ref().unwrap();
+            for attr in &field.attrs {
+                if attr.path().is_ident("has_many") || attr.path().is_ident("belongs_to") {
+                    let args = attr.parse_args::<RelationArgs>()?;
+                    relations.push(RelationMeta {
+                        relation_name: field_ident.to_string(),
+                        eager: args.eager,
+                    });
+                }
             }
         }
-        Ok(())
-    })
+    }
+    Ok(relations)
 }
 
 #[cfg(test)]
@@ -342,5 +471,34 @@ mod tests {
         };
         let tokens = impl_relations(&input).unwrap().to_string();
         assert!(tokens.is_empty());
+    }
+
+    #[test]
+    fn collect_relation_metadata_marks_eager() {
+        let input: DeriveInput = parse_quote! {
+            struct User {
+                id: i32,
+                #[has_many(Post, eager)]
+                posts: Option<Vec<Post>>,
+            }
+        };
+        let meta = collect_relation_metadata(&input).unwrap();
+        assert_eq!(meta.len(), 1);
+        assert!(meta[0].eager);
+        assert_eq!(meta[0].relation_name, "posts");
+    }
+
+    #[test]
+    fn impl_relations_generates_belongs_to_const() {
+        let input: DeriveInput = parse_quote! {
+            struct Post {
+                id: i32,
+                #[belongs_to(User)]
+                user: Option<User>,
+            }
+        };
+        let tokens = impl_relations(&input).unwrap().to_string();
+        assert!(tokens.contains("user"));
+        assert!(tokens.contains("Relation"));
     }
 }

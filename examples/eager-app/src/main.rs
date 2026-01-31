@@ -51,7 +51,7 @@ async fn main() -> Result<(), sqlx::Error> {
     // 3. Eager Load Test
     println!("--- Testing Eager Loading ---");
     let users = User::find_in_pool(&pool)
-        .include("posts") // Should trigger eager_load for "posts"
+        .include(User::posts) // Should trigger eager_load for "posts"
         .all()
         .await?;
 

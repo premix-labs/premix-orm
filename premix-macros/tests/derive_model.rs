@@ -10,7 +10,7 @@ struct User {
     id: i32,
     name: String,
     deleted_at: Option<String>,
-    #[has_many(Post)]
+    #[has_many(Post, eager)]
     #[premix(ignore)]
     posts: Option<Vec<Post>>,
 }
@@ -41,6 +41,14 @@ fn derive_model_generates_metadata() {
     assert!(<User as PremixModel<Sqlite>>::list_columns().contains(&"deleted_at".to_string()));
     assert!(<User as PremixModel<Sqlite>>::has_soft_delete());
     assert!(!<Post as PremixModel<Sqlite>>::has_soft_delete());
+}
+
+#[test]
+fn derive_model_relation_metadata() {
+    let relations = <User as PremixModel<Sqlite>>::relation_names();
+    assert!(relations.contains(&"posts"));
+    let eager = <User as PremixModel<Sqlite>>::default_includes();
+    assert!(eager.contains(&"posts"));
 }
 
 #[tokio::test]

@@ -68,8 +68,8 @@ async fn sqlite_multi_include_loads_multiple_relations() {
     comment.save(&pool).await.expect("save");
 
     let users = RelUser::find_in_pool(&pool)
-        .include("posts")
-        .include("comments")
+        .include(RelUser::posts)
+        .include(RelUser::comments)
         .all()
         .await
         .expect("all");
