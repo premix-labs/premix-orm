@@ -1,4 +1,4 @@
 # Clippy Configuration
-msrv = "1.75.0"
+msrv = "1.85.0"
 
 # Enforce some pedantic lints - Moved to Cargo.toml

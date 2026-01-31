@@ -22,25 +22,6 @@ jobs:
           - os: ubuntu-latest
             toolchain: nightly
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: premix_test
-        ports:
-          - 5432:5432
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: premix_test
-          MYSQL_USER: user
-          MYSQL_PASSWORD: password
-        ports:
-          - 3306:3306
-
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +42,71 @@ jobs:
 
       - name: Run Tests
         run: cargo test --workspace --verbose --all-features
+
+  db-tests:
+    name: DB Integration Tests (ubuntu, stable)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: premix_test
+        ports:
+          - 5432:5432
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: premix_test
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+        ports:
+          - 3306:3306
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Run Postgres tests
+        env:
+          DATABASE_URL: postgres://user:password@localhost:5432/premix_test
+        run: |
+          cargo test -p premix-core --features postgres
+          cargo test -p premix-orm --tests --features postgres
+      - name: Run MySQL tests
+        env:
+          DATABASE_URL: mysql://user:password@127.0.0.1:3306/premix_test
+        run: cargo test -p premix-orm --tests --features mysql
+
+  audit:
+    name: Audit & Docs (ubuntu, nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Install audit tools
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-semver-checks --locked
+      - name: Cargo audit
+        run: cargo audit
+      - name: Semver checks
+        run: |
+          cargo semver-checks check-release --manifest-path premix-core/Cargo.toml
+          cargo semver-checks check-release --manifest-path premix-macros/Cargo.toml
+          cargo semver-checks check-release --manifest-path premix-orm/Cargo.toml
+      - name: Build docs
+        run: cargo doc --workspace --all-features --no-deps
 
   msrv:
     name: MSRV Check (1.85.0)
